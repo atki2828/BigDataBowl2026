@@ -1,0 +1,49 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pdb
+*.so
+*.egg-info/
+.eggs/
+*.manifest
+*.spec
+
+# ---- Virtual Environments ----
+.venv/
+venv/
+env/
+ENV/
+
+# ---- Jupyter ----
+.ipynb_checkpoints/
+
+# ---- Logs ----
+*.log
+
+# ---- OS Files ----
+.DS_Store
+Thumbs.db
+
+# ---- VSCode ----
+.vscode/
+
+# ---- Test / Coverage ----
+.coverage
+htmlcov/
+.pytest_cache/
+
+# ---- Data ----
+*.csv
+*.tsv
+*.parquet
+*.feather
+*.xls
+*.xlsx
+
+# ---- Other ----
+*.zip
+*.tar
+*.tar.gz
+*.tmp
