@@ -1,0 +1,17 @@
+[project]
+name = "bigdatabowl2026"
+version = "0.1.0"
+description = "Big Data Bowl 2026 Analysis and Modeling"
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+    "polars>=0.20.30",
+    "pandas>=2.2.0",
+    "matplotlib",
+    "plotly",
+    "jupyter",
+    "scikit-learn",
+]
+
+[tool.uv]
