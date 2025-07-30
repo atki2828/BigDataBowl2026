@@ -47,3 +47,4 @@ htmlcov/
 *.tar
 *.tar.gz
 *.tmp
+*.ipynb
