@@ -4,6 +4,9 @@ import os
 import pandas as pd
 import plotly.express as px
 
+# test notes
+# This function creates a dummy football animation using Plotly
+
 
 def create_dummy_football_animation(output_path: str):
     # Dummy data for 2 teams and 10 frames
