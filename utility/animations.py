@@ -1,3 +1,5 @@
+from typing import Callable, Dict, List, Tuple
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -13,15 +15,24 @@ def create_bdb_field_figure(
     cols: int = 1,
     subplot_row: int = 1,
     subplot_col: int = 1,
-):
+) -> go.Figure:
+    """Creates a field figure for the Big Data Bowl.
+
+    Args:
+        use_subplots (bool, optional): Whether to use subplots. Defaults to False.
+        rows (int, optional): Number of rows in the subplot. Defaults to 1.
+        cols (int, optional): Number of columns in the subplot. Defaults to 1.
+        subplot_row (int, optional): Row number of the subplot. Defaults to 1.
+        subplot_col (int, optional): Column number of the subplot. Defaults to 1.
+
+    Returns:
+        go.Figure: The created field figure.
+    """
+    # Create figure
+    fig = make_subplots(rows=rows, cols=cols) if use_subplots else go.Figure()
+
     field_length = 120
     field_width = 53.3
-
-    if use_subplots:
-        fig = make_subplots(rows=rows, cols=cols)
-    else:
-        fig = go.Figure()
-
     # Field boundary
     field_shape = go.layout.Shape(
         type="rect",
@@ -133,7 +144,18 @@ def create_bdb_field_figure(
     return fig
 
 
-def add_los_and_first_down(fig, play_df, row: int = None, col: int = None):
+def add_los_and_first_down(fig, play_df, row: int = None, col: int = None) -> go.Figure:
+    """Adds the line of scrimmage and first down markers to the field figure.
+
+    Args:
+        fig (_type_): _description_
+        play_df (_type_): _description_
+        row (int, optional): _description_. Defaults to None.
+        col (int, optional): _description_. Defaults to None.
+
+    Returns:
+        go.Figure: The updated figure with LOS and first down markers.
+    """
     play = play_df.iloc[0]  # Assume this is one row (single play metadata)
 
     los_x = play["absoluteYardlineNumber"]
@@ -177,9 +199,33 @@ def add_los_and_first_down(fig, play_df, row: int = None, col: int = None):
     return fig
 
 
-def gameplay_trace_func(row, nfl_colors=nfl_colors, row_idx=1, col_idx=1):
-    """
-    Trace function that returns a dict compatible with subplot-aware create_trace_hash().
+def gameplay_trace_func(
+    row: pd.Series, nfl_colors: dict = nfl_colors, row_idx: int = 1, col_idx: int = 1
+):
+    """Generates a Plotly trace for visualizing a player or football position on the field.
+    This function creates a scatter plot trace with specific styling based on whether
+    the input represents a football or a player. For players, it shows their jersey
+    numbers and uses team-specific colors.
+        row (pd.Series): A pandas Series containing position and player data.
+            Must include 'x', 'y', 'displayName' columns, and for players:
+            'club', 'jerseyNumber'.
+        nfl_colors (dict, optional): Dictionary mapping NFL team codes to their
+            color hex codes. Defaults to predefined nfl_colors.
+        row_idx (int, optional): Row index for subplot positioning. Defaults to 1.
+        col_idx (int, optional): Column index for subplot positioning. Defaults to 1.
+        dict: A dictionary containing:
+            - trace (go.Scatter): The generated Plotly scatter trace
+            - row (int): Row index for subplot positioning
+            - col (int): Column index for subplot positioning
+    Example:
+        >>> player_data = pd.Series({
+        ...     'x': 25.5,
+        ...     'y': 53.3,
+        ...     'displayName': 'John Doe',
+        ...     'club': 'SEA',
+        ...     'jerseyNumber': 12
+        ... })
+        >>> trace_dict = gameplay_trace_func(player_data)
     """
     if row["displayName"].lower() == "football":
         trace = go.Scatter(
@@ -271,7 +317,19 @@ def gameplay_trace_func_df(df, nfl_colors=nfl_colors, row_idx=1, col_idx=1):
     return {"trace": [trace_football, trace_players], "row": row_idx, "col": col_idx}
 
 
-def create_trace_hash(df: pd.DataFrame, trace_func, metric=False):
+def create_trace_hash(
+    df: pd.DataFrame, trace_func: Callable, metric: bool = False
+) -> dict:
+    """Creates a hash of traces for each frame in the DataFrame.
+
+    Args:
+        df (pd.DataFrame): The input DataFrame containing player data.
+        trace_func (_type_): The function used to generate traces for each player.
+        metric (bool, optional): If True, computes a metric trace. Defaults to False.
+
+    Returns:
+        _dict: A dictionary where keys are frame IDs and values are lists plotly traces
+    """
     trace_dict = dict()
     if not metric:
         for frame_id in df["frameId"].unique():
@@ -295,7 +353,18 @@ def create_trace_hash(df: pd.DataFrame, trace_func, metric=False):
         return trace_func(df)
 
 
-def create_frames(trace_hash):
+def create_frames(
+    trace_hash: Dict[int, List[Tuple[go.Scatter, int, int]]],
+) -> List[go.Frame]:
+    """
+    Creates a list of frames for the animation from the trace hash.
+
+    Args:
+        trace_hash (Dict[int, List[Tuple[go.Scatter, int, int]]]): A dictionary where keys are frame IDs and values are lists of plotly traces.
+
+    Returns:
+        List[go.Frame]: A list of plotly frames for the animation.
+    """
     frames = []
     for frame_id, trace_tuples in trace_hash.items():
         frame_data = []
@@ -305,7 +374,15 @@ def create_frames(trace_hash):
     return frames
 
 
-def add_initial_traces(fig, trace_dict):
+def add_initial_traces(
+    fig: go.Figure, trace_dict: Dict[int, List[Tuple[go.Scatter, int, int]]]
+):
+    """Adds initial traces to the figure from the trace dictionary.
+
+    Args:
+        fig (go.Figure): The plotly figure to which traces will be added.
+        trace_dict (Dict[int, List[Tuple[go.Scatter, int, int]]]): A dictionary where keys are frame IDs and values are lists of plotly traces.
+    """
     first_frame = list(trace_dict.values())[0]
     for trace, row, col in first_frame:
         try:
@@ -314,7 +391,10 @@ def add_initial_traces(fig, trace_dict):
             fig.add_trace(trace)
 
 
-def animate_play(fig, frames, config=None):
+def animate_play(
+    fig: go.Figure, frames: List[go.Frame], config: dict = None
+) -> go.Figure:
+
     if not fig.data and frames:
         fig.add_traces(frames[0].data)
     config = config or {}
@@ -371,7 +451,17 @@ def animate_play(fig, frames, config=None):
     return fig
 
 
-def ball_carrier_speed_trace_func(df, row_idx=1, col_idx=2):
+def ball_carrier_speed_trace_func(df: pd.DataFrame, row_idx: int = 1, col_idx: int = 2):
+    """Creates a trace for the ball carrier speed.
+
+    Args:
+        df (pd.DataFrame): The input dataframe containing the data.
+        row_idx (int, optional): The row index for the trace. Defaults to 1.
+        col_idx (int, optional): The column index for the trace. Defaults to 2.
+
+    Returns:
+        Dict[int, List[Tuple[go.Scatter, int, int]]]: A dictionary where keys are frame IDs and values are lists of plotly traces.
+    """
     trace_dict = {}
 
     frame_ids = sorted(df["frameId"].unique())
@@ -399,12 +489,3 @@ def ball_carrier_speed_trace_func(df, row_idx=1, col_idx=2):
         trace_dict[frame_id] = [(trace, row_idx, col_idx)]
 
     return trace_dict
-
-
-def add_initial_traces(fig, trace_dict):
-    first_frame = list(trace_dict.values())[0]
-    for trace, row, col in first_frame:
-        try:
-            fig.add_trace(trace, row=row, col=col)
-        except Exception:
-            fig.add_trace(trace)
