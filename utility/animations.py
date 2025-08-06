@@ -2,8 +2,9 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import polars as pl
-from colors import nfl_colors
 from plotly.subplots import make_subplots
+
+from .colors import nfl_colors
 
 
 def create_bdb_field_figure(
@@ -398,3 +399,12 @@ def ball_carrier_speed_trace_func(df, row_idx=1, col_idx=2):
         trace_dict[frame_id] = [(trace, row_idx, col_idx)]
 
     return trace_dict
+
+
+def add_initial_traces(fig, trace_dict):
+    first_frame = list(trace_dict.values())[0]
+    for trace, row, col in first_frame:
+        try:
+            fig.add_trace(trace, row=row, col=col)
+        except Exception:
+            fig.add_trace(trace)
