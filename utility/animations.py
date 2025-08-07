@@ -328,7 +328,7 @@ def create_trace_hash(
         metric (bool, optional): If True, computes a metric trace. Defaults to False.
 
     Returns:
-        _dict: A dictionary where keys are frame IDs and values are lists plotly traces
+        trace_hash: A dictionary where keys are frame IDs and values are lists plotly traces
     """
     trace_dict = dict()
     if not metric:
@@ -349,7 +349,6 @@ def create_trace_hash(
             trace_dict[frame_id] = traces
         return trace_dict
     else:
-        print(metric)
         return trace_func(df)
 
 
@@ -366,11 +365,18 @@ def create_frames(
         List[go.Frame]: A list of plotly frames for the animation.
     """
     frames = []
+
+    max_frame_id = max(trace_hash.keys(), default=0)
+
     for frame_id, trace_tuples in trace_hash.items():
         frame_data = []
         for trace, _, _ in trace_tuples:
             frame_data.append(trace)
-        frames.append(go.Frame(name=str(frame_id), data=frame_data))
+        frames.append(
+            go.Frame(
+                name=str(frame_id), data=frame_data, baseframe=str(int(max_frame_id))
+            )
+        )
     return frames
 
 
