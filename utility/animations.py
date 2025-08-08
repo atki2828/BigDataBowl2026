@@ -144,259 +144,6 @@ def create_bdb_field_figure(
     return fig
 
 
-def add_los_and_first_down(fig, play_df, row: int = None, col: int = None) -> go.Figure:
-    """Adds the line of scrimmage and first down markers to the field figure.
-
-    Args:
-        fig (_type_): _description_
-        play_df (_type_): _description_
-        row (int, optional): _description_. Defaults to None.
-        col (int, optional): _description_. Defaults to None.
-
-    Returns:
-        go.Figure: The updated figure with LOS and first down markers.
-    """
-    play = play_df.iloc[0]  # Assume this is one row (single play metadata)
-
-    los_x = play["absoluteYardlineNumber"]
-    yards_to_go = play["yardsToGo"]
-    direction = play["playDirection"].lower()
-
-    if direction == "right":
-        first_down_x = los_x + yards_to_go
-    elif direction == "left":
-        first_down_x = los_x - yards_to_go
-    else:
-        raise ValueError(f"Unknown play direction: {direction}")
-
-    los_shape = dict(
-        type="line",
-        x0=los_x,
-        x1=los_x,
-        y0=0,
-        y1=53.3,
-        line=dict(color="darkblue", width=3),
-        name="Line of Scrimmage",
-    )
-
-    fd_shape = dict(
-        type="line",
-        x0=first_down_x,
-        x1=first_down_x,
-        y0=0,
-        y1=53.3,
-        line=dict(color="yellow", width=3),
-        name="Yard to Gain",
-    )
-
-    if row is not None and col is not None:
-        fig.add_shape(los_shape, row=row, col=col)
-        fig.add_shape(fd_shape, row=row, col=col)
-    else:
-        fig.add_shape(los_shape)
-        fig.add_shape(fd_shape)
-
-    return fig
-
-
-def gameplay_trace_func(
-    row: pd.Series, nfl_colors: dict = nfl_colors, row_idx: int = 1, col_idx: int = 1
-):
-    """Generates a Plotly trace for visualizing a player or football position on the field.
-    This function creates a scatter plot trace with specific styling based on whether
-    the input represents a football or a player. For players, it shows their jersey
-    numbers and uses team-specific colors.
-        row (pd.Series): A pandas Series containing position and player data.
-            Must include 'x', 'y', 'displayName' columns, and for players:
-            'club', 'jerseyNumber'.
-        nfl_colors (dict, optional): Dictionary mapping NFL team codes to their
-            color hex codes. Defaults to predefined nfl_colors.
-        row_idx (int, optional): Row index for subplot positioning. Defaults to 1.
-        col_idx (int, optional): Column index for subplot positioning. Defaults to 1.
-        dict: A dictionary containing:
-            - trace (go.Scatter): The generated Plotly scatter trace
-            - row (int): Row index for subplot positioning
-            - col (int): Column index for subplot positioning
-    Example:
-        >>> player_data = pd.Series({
-        ...     'x': 25.5,
-        ...     'y': 53.3,
-        ...     'displayName': 'John Doe',
-        ...     'club': 'SEA',
-        ...     'jerseyNumber': 12
-        ... })
-        >>> trace_dict = gameplay_trace_func(player_data)
-    """
-    if row["displayName"].lower() == "football":
-        trace = go.Scatter(
-            x=[row["x"]],
-            y=[row["y"]],
-            mode="markers",
-            marker=dict(size=10, color="saddlebrown", symbol="circle"),
-            name="Football",
-            hoverinfo="skip",
-            showlegend=False,
-        )
-    else:
-        club = row.get("club", "")
-        color = nfl_colors.get(club, "#888888")
-        trace = go.Scatter(
-            x=[row["x"]],
-            y=[row["y"]],
-            mode="markers+text",
-            marker=dict(size=24, color=color, line=dict(width=1, color="white")),
-            text=[str(int(row["jerseyNumber"]))],
-            textposition="middle center",
-            textfont=dict(color="white", size=10),
-            name=club,
-            hoverinfo="text",
-            showlegend=False,
-        )
-
-    return {"trace": trace, "row": row_idx, "col": col_idx}
-
-
-def ball_carrier_circle_trace_func(row, row_idx=1, col_idx=1):
-    """
-    Adds a translucent circle around the ball carrier for a given frame row.
-    Returns a subplot-aware trace dict only if the row is the ball carrier.
-    """
-    if row["nflId"] != row["ballCarrierId"]:
-        return None  # Skip non-carriers
-
-    trace = go.Scatter(
-        x=[row["x"]],
-        y=[row["y"]],
-        mode="markers",
-        marker=dict(
-            size=40,
-            color="rgba(255, 0, 0, 0.25)",
-            line=dict(width=2, color="red"),
-            symbol="circle",
-        ),
-        name="Ball Carrier",
-        hoverinfo="skip",
-        showlegend=False,
-    )
-
-    return {"trace": trace, "row": row_idx, "col": col_idx}
-
-
-def gameplay_trace_func_df(df, nfl_colors=nfl_colors, row_idx=1, col_idx=1):
-    """
-    Trace function that returns a dict compatible with subplot-aware create_trace_hash().
-    """
-    df_football = df.query("displayName=='football'").reset_index(drop=True)
-    df_players = df.query("displayName!='football'").reset_index(drop=True)
-    df_players["plot_color"] = df_players["club"].map(nfl_colors)
-
-    trace_football = go.Scatter(
-        x=df_football["x"],
-        y=df_football["y"],
-        mode="markers",
-        marker=dict(size=10, color="saddlebrown", symbol="circle"),
-        name="Football",
-        hoverinfo="skip",
-        showlegend=False,
-    )
-    trace_players = go.Scatter(
-        x=df_players["x"],
-        y=df_players["y"],
-        mode="markers+text",
-        marker=dict(
-            size=24, color=df_players["plot_color"], line=dict(width=1, color="white")
-        ),
-        text=[df_players["jerseyNumber"].astype(int).astype(str)],
-        textposition="middle center",
-        textfont=dict(color="white", size=10),
-        name="play",
-        hoverinfo="text",
-        showlegend=False,
-    )
-
-    return {"trace": [trace_football, trace_players], "row": row_idx, "col": col_idx}
-
-
-def create_trace_hash(
-    df: pd.DataFrame, trace_func: Callable, metric: bool = False
-) -> dict:
-    """Creates a hash of traces for each frame in the DataFrame.
-
-    Args:
-        df (pd.DataFrame): The input DataFrame containing player data.
-        trace_func (_type_): The function used to generate traces for each player.
-        metric (bool, optional): If True, computes a metric trace. Defaults to False.
-
-    Returns:
-        trace_hash: A dictionary where keys are frame IDs and values are lists plotly traces
-    """
-    trace_dict = dict()
-    if not metric:
-        for frame_id in df["frameId"].unique():
-            df_frame = df.query(f"frameId=={frame_id}").reset_index(drop=True)
-            traces = []
-            for _, row in df_frame.iterrows():
-                out = trace_func(row)
-                if out is None:
-                    continue
-                if isinstance(out, dict):
-                    trace = out["trace"]
-                    row_idx = out.get("row", 1)
-                    col_idx = out.get("col", 1)
-                    traces.append((trace, row_idx, col_idx))
-                else:
-                    traces.append((out, 1, 1))  # fallback
-            trace_dict[frame_id] = traces
-        return trace_dict
-    else:
-        return trace_func(df)
-
-
-def create_frames(
-    trace_hash: Dict[int, List[Tuple[go.Scatter, int, int]]],
-) -> List[go.Frame]:
-    """
-    Creates a list of frames for the animation from the trace hash.
-
-    Args:
-        trace_hash (Dict[int, List[Tuple[go.Scatter, int, int]]]): A dictionary where keys are frame IDs and values are lists of plotly traces.
-
-    Returns:
-        List[go.Frame]: A list of plotly frames for the animation.
-    """
-    frames = []
-
-    max_frame_id = max(trace_hash.keys(), default=0)
-
-    for frame_id, trace_tuples in trace_hash.items():
-        frame_data = []
-        for trace, _, _ in trace_tuples:
-            frame_data.append(trace)
-        frames.append(
-            go.Frame(
-                name=str(frame_id), data=frame_data, baseframe=str(int(max_frame_id))
-            )
-        )
-    return frames
-
-
-def add_initial_traces(
-    fig: go.Figure, trace_dict: Dict[int, List[Tuple[go.Scatter, int, int]]]
-):
-    """Adds initial traces to the figure from the trace dictionary.
-
-    Args:
-        fig (go.Figure): The plotly figure to which traces will be added.
-        trace_dict (Dict[int, List[Tuple[go.Scatter, int, int]]]): A dictionary where keys are frame IDs and values are lists of plotly traces.
-    """
-    first_frame = list(trace_dict.values())[0]
-    for trace, row, col in first_frame:
-        try:
-            fig.add_trace(trace, row=row, col=col)
-        except Exception:
-            fig.add_trace(trace)
-
-
 def animate_play(
     fig: go.Figure, frames: List[go.Frame], config: dict = None
 ) -> go.Figure:
@@ -457,41 +204,130 @@ def animate_play(
     return fig
 
 
-def ball_carrier_speed_trace_func(df: pd.DataFrame, row_idx: int = 1, col_idx: int = 2):
-    """Creates a trace for the ball carrier speed.
+class Field:
+    """Represents the static portion of the playing field for the animation."""
 
-    Args:
-        df (pd.DataFrame): The input dataframe containing the data.
-        row_idx (int, optional): The row index for the trace. Defaults to 1.
-        col_idx (int, optional): The column index for the trace. Defaults to 2.
+    def __init__(
+        self,
+        play_df: pd.DataFrame,
+        # TODO: maybe make this callabale part of the class
+        field_fig_drawer: Callable = create_bdb_field_figure,
+        use_subplots: bool = False,
+        row: int = None,
+        col: int = None,
+    ):
+        self.play_df = play_df
+        self.field_fig = field_fig_drawer()
+        self.field_fig = self.add_los_and_first_down()
+        self.use_subplots = use_subplots
+        self.row = row
+        self.col = col
 
-    Returns:
-        Dict[int, List[Tuple[go.Scatter, int, int]]]: A dictionary where keys are frame IDs and values are lists of plotly traces.
-    """
-    trace_dict = {}
+    def _add_los_and_first_down(self) -> go.Figure:
+        """Adds the line of scrimmage and first down markers to the field figure.
 
-    frame_ids = sorted(df["frameId"].unique())
-    x_vals = []
-    y_vals = []
+        Returns:
+            go.Figure: The updated figure with LOS and first down markers.
+        """
+        play = self.play_df.iloc[0]  # Assume this is one row (single play metadata)
 
-    for frame_id in frame_ids:
-        current_frame = df[df["frameId"] == frame_id]
-        if not current_frame.empty:
-            x_vals.append(frame_id)
-            y_vals.append(current_frame.iloc[0]["bcs"])
+        los_x = play["absoluteYardlineNumber"]
+        yards_to_go = play["yardsToGo"]
+        direction = play["playDirection"].lower()
 
-        trace = go.Scatter(
-            x=x_vals.copy(),
-            y=y_vals.copy(),
-            mode="lines+markers",
-            line=dict(color="red"),
-            marker=dict(size=6),
-            name="Ball Carrier Speed",
-            showlegend=(True),
+        if direction == "right":
+            first_down_x = los_x + yards_to_go
+        elif direction == "left":
+            first_down_x = los_x - yards_to_go
+        else:
+            raise ValueError(f"Unknown play direction: {direction}")
+
+        # Hard Coded Colors And Line Shapes May Want to make this configurable
+        los_shape = dict(
+            type="line",
+            x0=los_x,
+            x1=los_x,
+            y0=0,
+            y1=53.3,
+            line=dict(color="darkblue", width=3),
+            name="Line of Scrimmage",
         )
 
-        # IMPORTANT: must use same trace index and name across all frames
-        trace.uid = "ball_carrier_speed"
-        trace_dict[frame_id] = [(trace, row_idx, col_idx)]
+        fd_shape = dict(
+            type="line",
+            x0=first_down_x,
+            x1=first_down_x,
+            y0=0,
+            y1=53.3,
+            line=dict(color="yellow", width=3),
+            name="Yard to Gain",
+        )
 
-    return trace_dict
+        if self.row is not None and self.col is not None:
+            self.field_fig.add_shape(los_shape, row=self.row, col=self.col)
+            self.field_fig.add_shape(fd_shape, row=self.row, col=self.col)
+        else:
+            self.field_fig.add_shape(los_shape)
+            self.field_fig.add_shape(fd_shape)
+
+        return self.field_fig
+
+
+class TraceConfig:
+    def __init__(
+        self, row: pd.Series, trace_func: Callable, row_idx: int = 1, col_idx: int = 1
+    ):
+        """
+        Initializes a TraceConfig instance for creating traces from a DataFrame.
+
+        Args:
+            trace_func (Callable): The function used to generate the trace.
+            row_idx (int, optional): The row index for subplot positioning. Defaults to 1.
+            col_idx (int, optional): The column index for subplot positioning. Defaults to 1.
+        """
+        self.frame_id = row["frameId"].iloc[0]
+        self.trace = trace_func(row)
+        self.row_idx = row_idx
+        self.col_idx = col_idx
+
+
+class PlayAnimator:
+    """Handles the creation of an animated play figure with traces for players and ball carrier speed."""
+
+    def __init__(
+        self,
+        play_df: pd.DataFrame,
+        field: Field = None,
+        animation_config: dict = None,
+        trace_configs: List[TraceConfig] = None,
+    ):
+        self.play_df = play_df
+        self.field = field
+        self.animation_config = animation_config or {}
+        self.frames = self._create_frames(trace_configs)
+
+    def _create_frames(self, trace_configs: List[TraceConfig]) -> List[go.Frame]:
+        return [
+            go.Frame(data=[config.trace], name=str(config.frame_id))
+            for config in trace_configs
+        ]
+
+    def create_animation(self) -> go.Figure:
+        """Creates the animated play figure with traces for players and ball carrier speed.
+
+        Returns:
+            go.Figure: The animated play figure.
+        """
+        if not self.field:
+            raise ValueError("Field must be provided to create the animation.")
+
+        fig = self.field.field_fig
+
+        # Add initial traces from trace_configs
+        for config in self.frames[0].data:
+            fig.add_trace(config)
+
+        # Add frames to the figure
+        fig.frames = self.frames
+
+        return animate_play(fig, self.frames, config=self.animation_config)

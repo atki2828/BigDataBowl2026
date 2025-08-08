@@ -4,15 +4,10 @@ from functools import partial
 import plotly.graph_objects as go
 import polars as pl
 
-from utility.animations import (
-    add_initial_traces,
-    add_los_and_first_down,
-    animate_play,
+from utility.animations import Field, PlayAnimator, TraceConfig
+from utility.tracebuilders import (
     ball_carrier_circle_trace_func,
     ball_carrier_speed_trace_func,
-    create_bdb_field_figure,
-    create_frames,
-    create_trace_hash,
     gameplay_trace_func,
 )
 from utility.transformations import join_track_play_df, merge_trace_dicts
@@ -26,91 +21,6 @@ animation_config = {
     "play_label": "▶",
     "pause_label": "⏸",
 }
-
-
-def create_field_animation(df: pl.DataFrame, animation_config: dict) -> go.Figure:
-    """
-    Creates an animated field figure from the provided DataFrame.
-
-    Parameters:
-        df (pl.DataFrame): DataFrame containing tracking data.
-
-    Returns:
-        go.Figure: Animated field figure.
-    """
-    fig = create_bdb_field_figure()
-    fig = add_los_and_first_down(fig, df.to_pandas())
-
-    play_trace_hash = create_trace_hash(
-        df.to_pandas(), gameplay_trace_func, metric=False
-    )
-    ball_carrier_circle_hash = create_trace_hash(
-        df.to_pandas(), ball_carrier_circle_trace_func, metric=False
-    )
-
-    final_play_trace_hash = merge_trace_dicts(play_trace_hash, ball_carrier_circle_hash)
-    frames = create_frames(final_play_trace_hash)
-
-    return animate_play(fig, frames, config=animation_config)
-
-
-def play_metric_animation(df: pl.DataFrame, animation_config: dict) -> go.Figure:
-    """Creates a play metric animation figure.
-
-    Args:
-        df (pl.DataFrame): DataFrame containing tracking data.
-        animation_config (dict): Configuration dictionary for animation.
-
-    Returns:
-        go.Figure: Animated field figure.
-    """
-    max_frame_id = df.select(pl.col("frameId").max()).item()
-    speed_trace_func = partial(ball_carrier_speed_trace_func, row_idx=1, col_idx=2)
-    play_trace_hash = create_trace_hash(df.to_pandas(), gameplay_trace_func)
-    ball_carrier_circle_hash = create_trace_hash(
-        df.to_pandas(), ball_carrier_circle_trace_func
-    )
-    ball_carrier_speed_hash = create_trace_hash(
-        df.to_pandas(), speed_trace_func, metric=True
-    )
-    # Add static field with subplot support
-    fig = create_bdb_field_figure(
-        use_subplots=True, rows=1, cols=2, subplot_row=1, subplot_col=1
-    )
-    ball_carrier_circle_hash = create_trace_hash(
-        df.to_pandas(), ball_carrier_circle_trace_func
-    )
-    ball_carrier_speed_hash = create_trace_hash(
-        df.to_pandas(), speed_trace_func, metric=True
-    )
-    # Add static field with subplot support
-    fig = create_bdb_field_figure(
-        use_subplots=True, rows=1, cols=2, subplot_row=1, subplot_col=1
-    )
-    fig = add_los_and_first_down(fig, df.to_pandas(), row=1, col=1)
-
-    play_trace_hash = create_trace_hash(df.to_pandas(), gameplay_trace_func)
-    ball_carrier_circle_hash = create_trace_hash(
-        df.to_pandas(), ball_carrier_circle_trace_func
-    )
-    ball_carrier_speed_hash = create_trace_hash(
-        df.to_pandas(), speed_trace_func, metric=True
-    )
-
-    final_trace_hash = merge_trace_dicts(
-        play_trace_hash, ball_carrier_circle_hash, ball_carrier_speed_hash
-    )
-    add_initial_traces(fig, final_trace_hash)
-    # TODO: These are hardcoded values, consider making them dynamic
-    frames = create_frames(final_trace_hash)
-    fig = animate_play(fig, frames, config=animation_config)
-    fig.update_layout(
-        xaxis2=dict(
-            range=[0, max_frame_id], fixedrange=True
-        ),  # lock x-axis for subplot
-        yaxis2=dict(range=[0, 15], fixedrange=True),  # lock y-axis for subplot
-    )
-    return fig
 
 
 def create_animation_df(
@@ -139,6 +49,11 @@ def create_animation_df(
     return animate_play_df
 
 
+def create_play_fig(animate_play_df: pl.DataFrame) -> go.Figure:
+    field = Field(play_df=animate_play_df.to_pandas())
+    trace_configs = []
+
+
 def main():
     # Read In Data
     track_df = pl.read_csv(tracking_file_path, null_values="NA")
@@ -146,10 +61,6 @@ def main():
 
     # Transform Data to Create animate_play_df
     animate_play_df = create_animation_df(track_df, plays_df, 2022091109, 767)
-
-    # Create Animations
-    play_fig = create_field_animation(animate_play_df, animation_config)
-    play_metric_fig = play_metric_animation(animate_play_df, animation_config)
 
     # Write out the figures to HTML files
     play_fig.write_html(
