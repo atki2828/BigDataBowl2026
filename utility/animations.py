@@ -211,6 +211,7 @@ class Field:
         self,
         play_df: pd.DataFrame,
         # I like the flexibility of passing a callable to create the field figure
+        # TODO: Fill this in with partial in the implementation in the script
         field_fig_drawer: Callable = create_bdb_field_figure,
         use_subplots: bool = False,
         row: int = None,
@@ -220,7 +221,7 @@ class Field:
         self.row = row
         self.col = col
         self.use_subplots = use_subplots
-        self.field_fig = field_fig_drawer()
+        self.field_fig = field_fig_drawer(use_subplots=self.use_subplots)
         self.field_fig = self._add_los_and_first_down()
 
     def _add_los_and_first_down(self) -> go.Figure:
@@ -347,3 +348,30 @@ class PlayAnimator:
         fig.frames = self.frames
 
         return animate_play(fig, self.frames, config=self.animation_config)
+
+
+def build_trace_configs(
+    play_df: pd.DataFrame, trace_func: Callable, row: int = 1, col: int = 1
+) -> List[TraceConfig]:
+    """Builds trace configurations for the animated play DataFrame.
+
+    Args:
+        animate_play_df (pd.DataFrame): The DataFrame containing the animated play data.
+
+    Returns:
+        List[TraceConfig]: A list of TraceConfig objects for the animation.
+    """
+    trace_configs = (
+        play_df.groupby("frameId")
+        .apply(
+            lambda df: TraceConfig(
+                frame_df=df,
+                trace_func=trace_func,
+                row_idx=row,
+                col_idx=col,
+            )
+        )
+        .to_list()
+    )
+
+    return trace_configs

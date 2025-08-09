@@ -5,7 +5,13 @@ import pandas as pd
 import plotly.graph_objects as go
 import polars as pl
 
-from utility.animations import Field, PlayAnimator, TraceConfig
+from utility.animations import (
+    Field,
+    PlayAnimator,
+    TraceConfig,
+    build_trace_configs,
+    create_bdb_field_figure,
+)
 from utility.tracebuilders import (
     ball_carrier_circle_trace_func,
     ball_carrier_speed_trace_func,
@@ -96,6 +102,46 @@ def create_play_fig(
     return play_fig
 
 
+def create_play_metric_fig(
+    animate_play_df: pd.DataFrame, animation_config=animation_config
+) -> go.Figure:
+    """Creates a figure for the play metrics using the provided DataFrame.
+
+    Args:
+        animate_play_df (pl.DataFrame): The DataFrame containing the animated play data.
+
+    Returns:
+        go.Figure: The created play metrics figure.
+    """
+    field = Field(play_df=animate_play_df, use_subplots=True, row=1, col=1)
+    gameplay_trace_configs = build_trace_configs(
+        play_df=animate_play_df, trace_func=gameplay_trace_func, row=1, col=1
+    )
+    ball_carrier_circle_trace_configs = build_trace_configs(
+        play_df=animate_play_df, trace_func=ball_carrier_circle_trace_func, row=1, col=1
+    )
+
+    ball_carrier_speed_trace_configs = build_trace_configs(
+        play_df=animate_play_df, trace_func=ball_carrier_speed_trace_func, row=1, col=2
+    )
+
+    # This will concatenate a list of lists
+    trace_configs = sum(
+        [
+            gameplay_trace_configs,
+            ball_carrier_speed_trace_configs,
+            ball_carrier_circle_trace_configs,
+        ],
+        [],
+    )
+    play_metric_fig = PlayAnimator(
+        field=field,
+        animation_config=animation_config,
+        trace_configs=trace_configs,
+    ).create_animation()
+    return play_metric_fig
+
+
 def main():
     # Read In Data
     track_df = pl.read_csv(tracking_file_path, null_values="NA")
@@ -104,16 +150,17 @@ def main():
     # Transform Data to Create animate_play_df
     animate_play_df = create_animation_df(track_df, plays_df, GAME_ID, PLAY_ID)
     play_fig = create_play_fig(animate_play_df.to_pandas())
+    play_metric_fig = create_play_metric_fig(animate_play_df.to_pandas())
 
     # Write out the figures to HTML files
     play_fig.write_html(
         os.path.join(write_dir, f"game_{GAME_ID}_play_{PLAY_ID}.html"),
         include_plotlyjs="cdn",
     )
-    # play_metric_fig.write_html(
-    #     os.path.join(write_dir, f"game_{GAME_ID}_play_{PLAY_ID}_metric.html"),
-    #     include_plotlyjs="cdn",
-    # )
+    play_metric_fig.write_html(
+        os.path.join(write_dir, f"game_{GAME_ID}_play_{PLAY_ID}_metric.html"),
+        include_plotlyjs="cdn",
+    )
 
 
 if __name__ == "__main__":
