@@ -11,10 +11,10 @@ from .colors import nfl_colors
 
 def create_bdb_field_figure(
     use_subplots: bool = False,
-    rows: int = 1,
-    cols: int = 1,
-    subplot_row: int = 1,
-    subplot_col: int = 1,
+    row: int = 1,
+    col: int = 1,
+    subplot_rows: int = 1,
+    subplot_cols: int = 1,
 ) -> go.Figure:
     """Creates a field figure for the Big Data Bowl.
 
@@ -29,7 +29,11 @@ def create_bdb_field_figure(
         go.Figure: The created field figure.
     """
     # Create figure
-    fig = make_subplots(rows=rows, cols=cols) if use_subplots else go.Figure()
+    fig = (
+        make_subplots(rows=subplot_rows, cols=subplot_cols)
+        if use_subplots
+        else go.Figure()
+    )
 
     field_length = 120
     field_width = 53.3
@@ -46,7 +50,7 @@ def create_bdb_field_figure(
     )
 
     if use_subplots:
-        fig.add_shape(field_shape, row=subplot_row, col=subplot_col)
+        fig.add_shape(field_shape, row=row, col=col)
     else:
         fig.add_shape(field_shape)
 
@@ -62,7 +66,7 @@ def create_bdb_field_figure(
             layer="below",
         )
         if use_subplots:
-            fig.add_shape(line, row=subplot_row, col=subplot_col)
+            fig.add_shape(field_shape, row=row, col=col)
         else:
             fig.add_shape(line)
 
@@ -78,7 +82,7 @@ def create_bdb_field_figure(
                 line=dict(color="black", width=1),
             )
             if use_subplots:
-                fig.add_shape(line, row=subplot_row, col=subplot_col)
+                fig.add_shape(line, row=row, col=col)
             else:
                 fig.add_shape(line)
 
@@ -95,7 +99,7 @@ def create_bdb_field_figure(
             line=dict(width=0),
         )
         if use_subplots:
-            fig.add_shape(endzone, row=subplot_row, col=subplot_col)
+            fig.add_shape(field_shape, row=row, col=col)
         else:
             fig.add_shape(endzone)
 
@@ -279,8 +283,8 @@ class TraceConfig:
         self,
         frame_df: pd.DataFrame,
         trace_func: Callable,
-        row_idx: int = 1,
-        col_idx: int = 1,
+        row: int = 1,
+        col: int = 1,
     ):
         """
         Initializes a TraceConfig instance for creating traces from a DataFrame.
@@ -292,8 +296,8 @@ class TraceConfig:
         """
         self.frame_id = frame_df["frameId"].iloc[0]
         self.trace = trace_func(frame_df)
-        self.row_idx = row_idx
-        self.col_idx = col_idx
+        self.row = row
+        self.col = col
 
 
 class PlayAnimator:
@@ -367,8 +371,8 @@ def build_trace_configs(
             lambda df: TraceConfig(
                 frame_df=df,
                 trace_func=trace_func,
-                row_idx=row,
-                col_idx=col,
+                row=row,
+                col=col,
             )
         )
         .to_list()
