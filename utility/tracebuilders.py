@@ -33,72 +33,92 @@ def ball_carrier_speed_trace_func(df: pd.DataFrame) -> go.Scatter:
     return trace
 
 
-def gameplay_trace_func(row: pd.Series, nfl_colors: dict = nfl_colors) -> go.Scatter:
-    """Generates a Plotly trace for visualizing a player or football position on the field.
-    This function creates a scatter plot trace with specific styling based on whether
-    the input represents a football or a player. For players, it shows their jersey
-    numbers and uses team-specific colors.
-        row (pd.Series): A pandas Series containing position and player data.
+def gameplay_trace_func(
+    frame_df: pd.DataFrame, nfl_colors: dict = nfl_colors
+) -> go.Scatter:
+    """Generates a Plotly trace for visualizing players and football positions for a single frame.
+
+    Args:
+        df (pd.DataFrame): DataFrame containing a single frame of player and football position data.
             Must include 'x', 'y', 'displayName' columns, and for players:
             'club', 'jerseyNumber'.
         nfl_colors (dict, optional): Dictionary mapping NFL team codes to their
             color hex codes. Defaults to predefined nfl_colors.
-        row_idx (int, optional): Row index for subplot positioning. Defaults to 1.
-        col_idx (int, optional): Column index for subplot positioning. Defaults to 1.
-        dict: A dictionary containing:
-            - trace (go.Scatter): The generated Plotly scatter trace
-            - row (int): Row index for subplot positioning
-            - col (int): Column index for subplot positioning
-    Example:
-        >>> player_data = pd.Series({
-        ...     'x': 25.5,
-        ...     'y': 53.3,
-        ...     'displayName': 'John Doe',
-        ...     'club': 'SEA',
-        ...     'jerseyNumber': 12
-        ... })
-        >>> trace_dict = gameplay_trace_func(player_data)
-    """
-    if row["displayName"].lower() == "football":
-        trace = go.Scatter(
-            x=[row["x"]],
-            y=[row["y"]],
-            mode="markers",
-            marker=dict(size=10, color="saddlebrown", symbol="circle"),
-            name="Football",
-            hoverinfo="skip",
-            showlegend=False,
-        )
-    else:
-        club = row.get("club", "")
-        color = nfl_colors.get(club, "#888888")
-        trace = go.Scatter(
-            x=[row["x"]],
-            y=[row["y"]],
-            mode="markers+text",
-            marker=dict(size=24, color=color, line=dict(width=1, color="white")),
-            text=[str(int(row["jerseyNumber"]))],
-            textposition="middle center",
-            textfont=dict(color="white", size=10),
-            name=club,
-            hoverinfo="text",
-            showlegend=False,
-        )
 
+    Returns:
+        go.Scatter: A single Plotly scatter trace containing all players and football positions
+    """
+    # Split into players and football - should be only one football entry
+    is_football = frame_df["displayName"].str.lower() == "football"
+    players_df = frame_df[~is_football].reset_index(drop=True)
+    football_df = frame_df[is_football].reset_index(drop=True)
+
+    # Player positions and properties
+    player_x = players_df["x"].tolist()
+    player_y = players_df["y"].tolist()
+    player_colors = [nfl_colors.get(club, "#888888") for club in players_df["club"]]
+    player_text = [
+        str(int(num)) if pd.notna(num) else "" for num in players_df["jerseyNumber"]
+    ]
+
+    # Football position - should be single entry
+    if not football_df.empty:
+        x_positions = player_x + [football_df.iloc[0]["x"]]
+        y_positions = player_y + [football_df.iloc[0]["y"]]
+        marker_colors = player_colors + ["saddlebrown"]
+        marker_sizes = [24] * len(player_x) + [10]
+        marker_line_widths = [1] * len(player_x) + [0]
+        marker_line_colors = ["white"] * len(player_x) + ["saddlebrown"]
+        text = player_text + [""]
+    else:
+        x_positions = player_x
+        y_positions = player_y
+        marker_colors = player_colors
+        marker_sizes = [24] * len(player_x)
+        marker_line_widths = [1] * len(player_x)
+        marker_line_colors = ["white"] * len(player_x)
+        text = player_text
+
+    trace = go.Scatter(
+        x=x_positions,
+        y=y_positions,
+        mode="markers+text",
+        marker=dict(
+            color=marker_colors,
+            size=marker_sizes,
+            line=dict(width=marker_line_widths, color=marker_line_colors),
+        ),
+        text=text,
+        textposition="middle center",
+        textfont=dict(color="white", size=10),
+        hoverinfo="text",
+        showlegend=False,
+    )
+    trace.name = "gameplay_trace"
     return trace
 
 
-def ball_carrier_circle_trace_func(row) -> go.Scatter:
+def ball_carrier_circle_trace_func(frame_df: pd.DataFrame) -> go.Scatter:
     """
-    Adds a translucent circle around the ball carrier for a given frame row.
-    Returns a subplot-aware trace dict only if the row is the ball carrier.
+    Adds a translucent circle around the ball carrier for a given frame.
+
+    Args:
+        frame_df (pd.DataFrame): DataFrame containing a single frame of player data.
+            Must include 'x', 'y', 'nflId', 'ballCarrierId' columns.
+
+    Returns:
+        go.Scatter: A trace containing a translucent circle around the ball carrier,
+                   or None if no ball carrier is found in the frame.
     """
-    if row["nflId"] != row["ballCarrierId"]:
-        return None  # Skip non-carriers
+    # Find the ball carrier
+    ball_carrier = frame_df[frame_df["nflId"] == frame_df["ballCarrierId"]]
+
+    if ball_carrier.empty:
+        return None
 
     trace = go.Scatter(
-        x=[row["x"]],
-        y=[row["y"]],
+        x=[ball_carrier.iloc[0]["x"]],
+        y=[ball_carrier.iloc[0]["y"]],
         mode="markers",
         marker=dict(
             size=40,
@@ -110,5 +130,6 @@ def ball_carrier_circle_trace_func(row) -> go.Scatter:
         hoverinfo="skip",
         showlegend=False,
     )
+    trace.name = "ball_carrier_circle_trace"
 
     return trace

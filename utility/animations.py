@@ -210,18 +210,18 @@ class Field:
     def __init__(
         self,
         play_df: pd.DataFrame,
-        # TODO: maybe make this callabale part of the class
+        # I like the flexibility of passing a callable to create the field figure
         field_fig_drawer: Callable = create_bdb_field_figure,
         use_subplots: bool = False,
         row: int = None,
         col: int = None,
     ):
         self.play_df = play_df
-        self.field_fig = field_fig_drawer()
-        self.field_fig = self.add_los_and_first_down()
-        self.use_subplots = use_subplots
         self.row = row
         self.col = col
+        self.use_subplots = use_subplots
+        self.field_fig = field_fig_drawer()
+        self.field_fig = self._add_los_and_first_down()
 
     def _add_los_and_first_down(self) -> go.Figure:
         """Adds the line of scrimmage and first down markers to the field figure.
@@ -275,7 +275,11 @@ class Field:
 
 class TraceConfig:
     def __init__(
-        self, row: pd.Series, trace_func: Callable, row_idx: int = 1, col_idx: int = 1
+        self,
+        frame_df: pd.DataFrame,
+        trace_func: Callable,
+        row_idx: int = 1,
+        col_idx: int = 1,
     ):
         """
         Initializes a TraceConfig instance for creating traces from a DataFrame.
@@ -285,8 +289,8 @@ class TraceConfig:
             row_idx (int, optional): The row index for subplot positioning. Defaults to 1.
             col_idx (int, optional): The column index for subplot positioning. Defaults to 1.
         """
-        self.frame_id = row["frameId"].iloc[0]
-        self.trace = trace_func(row)
+        self.frame_id = frame_df["frameId"].iloc[0]
+        self.trace = trace_func(frame_df)
         self.row_idx = row_idx
         self.col_idx = col_idx
 
@@ -296,36 +300,48 @@ class PlayAnimator:
 
     def __init__(
         self,
-        play_df: pd.DataFrame,
         field: Field = None,
         animation_config: dict = None,
         trace_configs: List[TraceConfig] = None,
     ):
-        self.play_df = play_df
         self.field = field
         self.animation_config = animation_config or {}
         self.frames = self._create_frames(trace_configs)
 
     def _create_frames(self, trace_configs: List[TraceConfig]) -> List[go.Frame]:
-        return [
-            go.Frame(data=[config.trace], name=str(config.frame_id))
-            for config in trace_configs
-        ]
+        """Creates frames with all traces for each frame ID.
 
-    def create_animation(self) -> go.Figure:
-        """Creates the animated play figure with traces for players and ball carrier speed.
+        Args:
+            trace_configs: List of TraceConfig objects
 
         Returns:
-            go.Figure: The animated play figure.
+            List of Plotly frames with all traces for each frame
         """
+        # Group traces by frame ID
+        frame_traces = {}
+        for config in trace_configs:
+            if config.frame_id not in frame_traces:
+                frame_traces[config.frame_id] = []
+            frame_traces[config.frame_id].append(config.trace)
+
+        # Create frames with all traces for each frame ID
+        frames = [
+            go.Frame(data=traces, name=str(frame_id))
+            for frame_id, traces in frame_traces.items()
+        ]
+
+        return frames
+
+    def create_animation(self) -> go.Figure:
+        """Creates the animated play figure with traces for players and ball carrier speed."""
         if not self.field:
             raise ValueError("Field must be provided to create the animation.")
 
         fig = self.field.field_fig
 
-        # Add initial traces from trace_configs
-        for config in self.frames[0].data:
-            fig.add_trace(config)
+        # Add all initial traces from first frame
+        for trace in self.frames[0].data:
+            fig.add_trace(trace)
 
         # Add frames to the figure
         fig.frames = self.frames
