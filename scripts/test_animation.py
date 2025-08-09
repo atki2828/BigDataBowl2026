@@ -113,7 +113,14 @@ def create_play_metric_fig(
     Returns:
         go.Figure: The created play metrics figure.
     """
-    field = Field(play_df=animate_play_df, use_subplots=True, row=1, col=1)
+    field = Field(
+        play_df=animate_play_df,
+        use_subplots=True,
+        row=1,
+        col=1,
+        subplot_rows=1,
+        subplot_cols=2,
+    )
     gameplay_trace_configs = build_trace_configs(
         play_df=animate_play_df, trace_func=gameplay_trace_func, row=1, col=1
     )
@@ -149,14 +156,9 @@ def main():
 
     # Transform Data to Create animate_play_df
     animate_play_df = create_animation_df(track_df, plays_df, GAME_ID, PLAY_ID)
-    play_fig = create_play_fig(animate_play_df.to_pandas())
+
     play_metric_fig = create_play_metric_fig(animate_play_df.to_pandas())
 
-    # Write out the figures to HTML files
-    play_fig.write_html(
-        os.path.join(write_dir, f"game_{GAME_ID}_play_{PLAY_ID}.html"),
-        include_plotlyjs="cdn",
-    )
     play_metric_fig.write_html(
         os.path.join(write_dir, f"game_{GAME_ID}_play_{PLAY_ID}_metric.html"),
         include_plotlyjs="cdn",

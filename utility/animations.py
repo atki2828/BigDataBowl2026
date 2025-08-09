@@ -220,12 +220,20 @@ class Field:
         use_subplots: bool = False,
         row: int = None,
         col: int = None,
+        subplot_rows: int = 1,
+        subplot_cols: int = 1,
     ):
         self.play_df = play_df
         self.row = row
         self.col = col
         self.use_subplots = use_subplots
-        self.field_fig = field_fig_drawer(use_subplots=self.use_subplots)
+        self.field_fig = field_fig_drawer(
+            use_subplots=self.use_subplots,
+            row=self.row,
+            col=self.col,
+            subplot_rows=subplot_rows,
+            subplot_cols=subplot_cols,
+        )
         self.field_fig = self._add_los_and_first_down()
 
     def _add_los_and_first_down(self) -> go.Figure:
@@ -311,29 +319,56 @@ class PlayAnimator:
     ):
         self.field = field
         self.animation_config = animation_config or {}
-        self.frames = self._create_frames(trace_configs)
+        self.trace_configs = trace_configs
+        # Group trace configs by frame ID before creating frames
+        self.frame_configs = self._group_trace_configs(trace_configs)
+        self.frames = self._create_frames(self.frame_configs)
 
-    def _create_frames(self, trace_configs: List[TraceConfig]) -> List[go.Frame]:
-        """Creates frames with all traces for each frame ID.
-
-        Args:
-            trace_configs: List of TraceConfig objects
-
-        Returns:
-            List of Plotly frames with all traces for each frame
-        """
-        # Group traces by frame ID
-        frame_traces = {}
+    def _group_trace_configs(
+        self, trace_configs: List[TraceConfig]
+    ) -> Dict[int, List[TraceConfig]]:
+        """Groups trace configs by frame ID to maintain subplot relationships."""
+        frame_configs = {}
         for config in trace_configs:
-            if config.frame_id not in frame_traces:
-                frame_traces[config.frame_id] = []
-            frame_traces[config.frame_id].append(config.trace)
+            if config.frame_id not in frame_configs:
+                frame_configs[config.frame_id] = []
+            frame_configs[config.frame_id].append(config)
+        return frame_configs
 
-        # Create frames with all traces for each frame ID
-        frames = [
-            go.Frame(data=traces, name=str(frame_id))
-            for frame_id, traces in frame_traces.items()
-        ]
+    def _create_frames(
+        self, frame_configs: Dict[int, List[TraceConfig]]
+    ) -> List[go.Frame]:
+        """Creates frames ensuring traces maintain their subplot positions."""
+        frames = []
+
+        # Sort frame IDs to ensure proper sequence
+        frame_ids = sorted(frame_configs.keys())
+
+        for frame_id in frame_ids:
+            configs = frame_configs[frame_id]
+            frame_data = []
+
+            # Create traces with their subplot assignments
+            for config in configs:
+                trace = config.trace
+                # Clone trace to avoid modifying original
+                frame_trace = go.Scatter(
+                    x=trace.x,
+                    y=trace.y,
+                    mode=trace.mode,
+                    marker=trace.marker,
+                    text=trace.text,
+                    textposition=trace.textposition,
+                    textfont=trace.textfont,
+                    hoverinfo=trace.hoverinfo,
+                    showlegend=trace.showlegend,
+                    name=trace.name,
+                    xaxis=f"x{config.col}" if config.col > 1 else "x",
+                    yaxis=f"y{config.row}" if config.row > 1 else "y",
+                )
+                frame_data.append(frame_trace)
+
+            frames.append(go.Frame(data=frame_data, name=str(frame_id)))
 
         return frames
 
@@ -344,9 +379,10 @@ class PlayAnimator:
 
         fig = self.field.field_fig
 
-        # Add all initial traces from first frame
-        for trace in self.frames[0].data:
-            fig.add_trace(trace)
+        # Add initial traces with correct subplot positioning
+        first_frame_configs = self.frame_configs[min(self.frame_configs.keys())]
+        for config in first_frame_configs:
+            fig.add_trace(config.trace, row=config.row, col=config.col)
 
         # Add frames to the figure
         fig.frames = self.frames
