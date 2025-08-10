@@ -1,3 +1,5 @@
+"""Module for buiding plotly traced for Play Animations"""
+
 from typing import Callable
 
 import pandas as pd
@@ -7,6 +9,14 @@ from .colors import nfl_colors
 
 
 def ball_carrier_speed_trace_func(df: pd.DataFrame) -> go.Scatter:
+    """Generates a Plotly trace for visualizing ball carrier speed over time.
+
+    Args:
+        df (pd.DataFrame): DataFrame containing ball carrier tracking data.
+
+    Returns:
+        go.Scatter: A Plotly scatter trace for ball carrier speed.
+    """
     frame_ids = sorted(df["frameId"].unique())
     x_vals = []
     y_vals = []
@@ -136,7 +146,21 @@ def ball_carrier_circle_trace_func(frame_df: pd.DataFrame) -> go.Scatter:
 
 
 # Closure pattern works nice with any line plot
-def build_metric_trace_func(play_df: pd.DataFrame, x_col: str, y_col, name) -> Callable:
+def build_metric_trace_func(
+    play_df: pd.DataFrame, x_col: str, y_col: str, name: str
+) -> Callable:
+    """Builds a metric trace function for a given play DataFrame.
+
+    Args:
+        play_df (pd.DataFrame): The play DataFrame.
+        x_col (str): The column name for the x-axis.
+        y_col (str): The column name for the y-axis.
+        name (str): The name of the trace.
+
+    Returns:
+        Callable: A function that generates a Plotly scatter trace.
+    """
+
     play_df = play_df.sort_values(x_col)
 
     def trace_func(frame_df: pd.DataFrame) -> go.Scatter:
@@ -149,7 +173,7 @@ def build_metric_trace_func(play_df: pd.DataFrame, x_col: str, y_col, name) -> C
             name=name,
             showlegend=True,
         )
-        tr.uid = "bcs_line"
+        tr.uid = f"metric_trace_{name}"
         return tr
 
     return trace_func
