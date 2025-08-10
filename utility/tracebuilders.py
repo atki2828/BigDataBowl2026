@@ -1,4 +1,4 @@
-from typing import Dict, List, Tuple
+from typing import Callable
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -133,3 +133,23 @@ def ball_carrier_circle_trace_func(frame_df: pd.DataFrame) -> go.Scatter:
     trace.name = "ball_carrier_circle_trace"
 
     return trace
+
+
+# Closure pattern works nice with any line plot
+def build_metric_trace_func(play_df: pd.DataFrame, x_col: str, y_col, name) -> Callable:
+    play_df = play_df.sort_values(x_col)
+
+    def trace_func(frame_df: pd.DataFrame) -> go.Scatter:
+        fid = int(frame_df["frameId"].iloc[0])
+        sub = play_df[play_df["frameId"] <= fid]
+        tr = go.Scatter(
+            x=sub[x_col].to_numpy(),
+            y=sub[y_col].to_numpy(),
+            mode="lines",
+            name=name,
+            showlegend=True,
+        )
+        tr.uid = "bcs_line"
+        return tr
+
+    return trace_func

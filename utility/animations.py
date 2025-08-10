@@ -1,4 +1,4 @@
-from typing import Callable, Dict, List, Tuple
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -7,145 +7,6 @@ import polars as pl
 from plotly.subplots import make_subplots
 
 from .colors import nfl_colors
-
-
-def create_bdb_field_figure(
-    use_subplots: bool = False,
-    row: int = 1,
-    col: int = 1,
-    subplot_rows: int = 1,
-    subplot_cols: int = 1,
-) -> go.Figure:
-    """Creates a field figure for the Big Data Bowl.
-
-    Args:
-        use_subplots (bool, optional): Whether to use subplots. Defaults to False.
-        rows (int, optional): Number of rows in the subplot. Defaults to 1.
-        cols (int, optional): Number of columns in the subplot. Defaults to 1.
-        subplot_row (int, optional): Row number of the subplot. Defaults to 1.
-        subplot_col (int, optional): Column number of the subplot. Defaults to 1.
-
-    Returns:
-        go.Figure: The created field figure.
-    """
-    # Create figure
-    fig = (
-        make_subplots(rows=subplot_rows, cols=subplot_cols)
-        if use_subplots
-        else go.Figure()
-    )
-
-    field_length = 120
-    field_width = 53.3
-    # Field boundary
-    field_shape = go.layout.Shape(
-        type="rect",
-        x0=0,
-        x1=field_length,
-        y0=0,
-        y1=field_width,
-        line=dict(color="black", width=2),
-        fillcolor="white",
-        layer="below",
-    )
-
-    if use_subplots:
-        fig.add_shape(field_shape, row=row, col=col)
-    else:
-        fig.add_shape(field_shape)
-
-    # Yard lines every 5 yards
-    for x in range(10, 111, 5):
-        line = go.layout.Shape(
-            type="line",
-            x0=x,
-            x1=x,
-            y0=0,
-            y1=field_width,
-            line=dict(color="lightgray", width=1),
-            layer="below",
-        )
-        if use_subplots:
-            fig.add_shape(field_shape, row=row, col=col)
-        else:
-            fig.add_shape(line)
-
-    # Hash marks (two rows)
-    for x in range(11, 110):
-        for y in [23.366, 29.934]:
-            line = go.layout.Shape(
-                type="line",
-                x0=x,
-                x1=x,
-                y0=y,
-                y1=(y + 0.4 if y < 26 else y - 0.4),
-                line=dict(color="black", width=1),
-            )
-            if use_subplots:
-                fig.add_shape(line, row=row, col=col)
-            else:
-                fig.add_shape(line)
-
-    # End zones
-    for x0, x1 in [(0, 10), (110, 120)]:
-        endzone = go.layout.Shape(
-            type="rect",
-            x0=x0,
-            x1=x1,
-            y0=0,
-            y1=field_width,
-            fillcolor="lightgray",
-            opacity=0.1,
-            line=dict(width=0),
-        )
-        if use_subplots:
-            fig.add_shape(field_shape, row=row, col=col)
-        else:
-            fig.add_shape(endzone)
-
-    # Yard line numbers
-    yard_numbers = list(range(10, 60, 10)) + list(range(50, 0, -10))
-    yard_positions = list(range(10, 110, 10))
-    for yard, x in zip(yard_numbers, yard_positions):
-        annotations = [
-            dict(
-                x=x,
-                y=2,
-                text=str(yard),
-                showarrow=False,
-                font=dict(size=12, color="black"),
-            ),
-            dict(
-                x=x,
-                y=field_width - 2,
-                text=str(yard),
-                showarrow=False,
-                font=dict(size=12, color="black"),
-                textangle=180,
-            ),
-        ]
-        for ann in annotations:
-            fig.add_annotation(ann)
-
-    # Layout config
-    fig.update_layout(
-        width=1200,
-        height=600,
-        margin=dict(l=0, r=0, t=0, b=0),
-        xaxis=dict(
-            range=[0, field_length],
-            showgrid=False,
-            zeroline=False,
-            showticklabels=False,
-        ),
-        yaxis=dict(
-            range=[0, field_width], showgrid=False, zeroline=False, showticklabels=False
-        ),
-        plot_bgcolor="white",
-        paper_bgcolor="white",
-    )
-
-    return fig
 
 
 def animate_play(
@@ -158,6 +19,7 @@ def animate_play(
     fig.frames = frames
 
     fig.update_layout(
+        margin=dict(b=140),  # extra bottom margin for buttons + slider
         updatemenus=[
             {
                 "type": "buttons",
@@ -169,9 +31,10 @@ def animate_play(
                             None,
                             {
                                 "frame": {
-                                    "duration": config.get("duration", 100),
+                                    "duration": config.get("duration", 33),
                                     "redraw": config.get("redraw", False),
                                 },
+                                "transition": {"duration": 0},
                                 "fromcurrent": True,
                             },
                         ],
@@ -183,8 +46,10 @@ def animate_play(
                     },
                 ],
                 "direction": "left",
-                "x": 0.1,
-                "y": 0,
+                "x": 0.05,
+                "y": -0.23,  # further down, under the slider
+                "xanchor": "center",
+                "yanchor": "top",
                 "showactive": False,
             }
         ],
@@ -193,60 +58,173 @@ def animate_play(
                 "steps": [
                     {
                         "method": "animate",
-                        "args": [[f.name], {"mode": "immediate"}],
+                        "args": [
+                            [f.name],
+                            {
+                                "mode": "immediate",
+                                "frame": {
+                                    "duration": config.get("duration", 33),
+                                    "redraw": config.get("redraw", False),
+                                },
+                                "transition": {"duration": 0},
+                            },
+                        ],
                         "label": f.name,
                     }
                     for f in frames
                 ],
                 "x": 0.1,
-                "y": -0.05,
+                "y": -0.12,  # keep slider just below plot
                 "currentvalue": {"prefix": config.get("slider_prefix", "Frame: ")},
             }
         ],
     )
-
     return fig
 
 
+# --------------------------
+# Field (always subplots)
+# --------------------------
 class Field:
     """Represents the static portion of the playing field for the animation."""
 
     def __init__(
         self,
         play_df: pd.DataFrame,
-        # I like the flexibility of passing a callable to create the field figure
-        # TODO: Fill this in with partial in the implementation in the script
-        field_fig_drawer: Callable = create_bdb_field_figure,
-        use_subplots: bool = False,
-        row: int = None,
-        col: int = None,
+        row: int = 1,
+        col: int = 1,
         subplot_rows: int = 1,
         subplot_cols: int = 1,
+        width: int = 1200,
+        height: int = 600,
     ):
         self.play_df = play_df
         self.row = row
         self.col = col
-        self.use_subplots = use_subplots
-        self.field_fig = field_fig_drawer(
-            use_subplots=self.use_subplots,
+        self.subplot_rows = subplot_rows
+        self.subplot_cols = subplot_cols
+
+        self.field_fig = make_subplots(rows=subplot_rows, cols=subplot_cols)
+        self._draw_field()
+        self._add_los_and_first_down()
+
+        field_length = 120
+        field_width = 53.3
+
+        self.field_fig.update_layout(
+            width=width,
+            height=height,
+            margin=dict(l=0, r=0, t=0, b=0),
+            plot_bgcolor="white",
+            paper_bgcolor="white",
+        )
+        self.field_fig.update_xaxes(
+            range=[0, field_length],
+            showgrid=False,
+            zeroline=False,
+            showticklabels=False,
             row=self.row,
             col=self.col,
-            subplot_rows=subplot_rows,
-            subplot_cols=subplot_cols,
         )
-        self.field_fig = self._add_los_and_first_down()
+        self.field_fig.update_yaxes(
+            range=[0, field_width],
+            showgrid=False,
+            zeroline=False,
+            showticklabels=False,
+            row=self.row,
+            col=self.col,
+        )
 
-    def _add_los_and_first_down(self) -> go.Figure:
-        """Adds the line of scrimmage and first down markers to the field figure.
+    def _draw_field(self) -> None:
+        field_length = 120
+        field_width = 53.3
 
-        Returns:
-            go.Figure: The updated figure with LOS and first down markers.
-        """
-        play = self.play_df.iloc[0]  # Assume this is one row (single play metadata)
+        # Boundary
+        self.field_fig.add_shape(
+            type="rect",
+            x0=0,
+            x1=field_length,
+            y0=0,
+            y1=field_width,
+            line=dict(color="black", width=2),
+            fillcolor="white",
+            layer="below",
+            row=self.row,
+            col=self.col,
+        )
 
-        los_x = play["absoluteYardlineNumber"]
-        yards_to_go = play["yardsToGo"]
-        direction = play["playDirection"].lower()
+        # Yard lines every 5 yards
+        for x in range(10, 111, 5):
+            self.field_fig.add_shape(
+                type="line",
+                x0=x,
+                x1=x,
+                y0=0,
+                y1=field_width,
+                line=dict(color="lightgray", width=1),
+                layer="below",
+                row=self.row,
+                col=self.col,
+            )
+
+        # Hash marks (two rows)
+        for x in range(11, 110):
+            for y in [23.366, 29.934]:
+                self.field_fig.add_shape(
+                    type="line",
+                    x0=x,
+                    x1=x,
+                    y0=y,
+                    y1=(y + 0.4 if y < 26 else y - 0.4),
+                    line=dict(color="black", width=1),
+                    row=self.row,
+                    col=self.col,
+                )
+
+        # End zones
+        for x0, x1 in [(0, 10), (110, 120)]:
+            self.field_fig.add_shape(
+                type="rect",
+                x0=x0,
+                x1=x1,
+                y0=0,
+                y1=field_width,
+                fillcolor="lightgray",
+                opacity=0.1,
+                line=dict(width=0),
+                row=self.row,
+                col=self.col,
+            )
+
+        # Yard numbers
+        yard_numbers = list(range(10, 60, 10)) + list(range(50, 0, -10))
+        yard_positions = list(range(10, 110, 10))
+        for yard, x in zip(yard_numbers, yard_positions):
+            self.field_fig.add_annotation(
+                x=x,
+                y=2,
+                text=str(yard),
+                showarrow=False,
+                font=dict(size=12, color="black"),
+                row=self.row,
+                col=self.col,
+            )
+            self.field_fig.add_annotation(
+                x=x,
+                y=field_width - 2,
+                text=str(yard),
+                showarrow=False,
+                font=dict(size=12, color="black"),
+                textangle=180,
+                row=self.row,
+                col=self.col,
+            )
+
+    def _add_los_and_first_down(self) -> None:
+        play = self.play_df.iloc[0]
+        los_x = float(play["absoluteYardlineNumber"])
+        yards_to_go = float(play["yardsToGo"])
+        direction = str(play["playDirection"]).lower()
 
         if direction == "right":
             first_down_x = los_x + yards_to_go
@@ -255,163 +233,150 @@ class Field:
         else:
             raise ValueError(f"Unknown play direction: {direction}")
 
-        # Hard Coded Colors And Line Shapes May Want to make this configurable
-        los_shape = dict(
+        self.field_fig.add_shape(
             type="line",
             x0=los_x,
             x1=los_x,
             y0=0,
             y1=53.3,
             line=dict(color="darkblue", width=3),
-            name="Line of Scrimmage",
+            row=self.row,
+            col=self.col,
         )
-
-        fd_shape = dict(
+        self.field_fig.add_shape(
             type="line",
             x0=first_down_x,
             x1=first_down_x,
             y0=0,
             y1=53.3,
             line=dict(color="yellow", width=3),
-            name="Yard to Gain",
+            row=self.row,
+            col=self.col,
         )
 
-        if self.row is not None and self.col is not None:
-            self.field_fig.add_shape(los_shape, row=self.row, col=self.col)
-            self.field_fig.add_shape(fd_shape, row=self.row, col=self.col)
-        else:
-            self.field_fig.add_shape(los_shape)
-            self.field_fig.add_shape(fd_shape)
 
-        return self.field_fig
-
-
+# --------------------------
+# Trace plumbing
+# --------------------------
 class TraceConfig:
     def __init__(
         self,
         frame_df: pd.DataFrame,
-        trace_func: Callable,
+        trace_func: Callable[[pd.DataFrame], go.Scatter],
         row: int = 1,
         col: int = 1,
     ):
         """
-        Initializes a TraceConfig instance for creating traces from a DataFrame.
-
-        Args:
-            trace_func (Callable): The function used to generate the trace.
-            row_idx (int, optional): The row index for subplot positioning. Defaults to 1.
-            col_idx (int, optional): The column index for subplot positioning. Defaults to 1.
+        Holds a single frame's trace and where it belongs in the subplot grid.
         """
-        self.frame_id = frame_df["frameId"].iloc[0]
-        self.trace = trace_func(frame_df)
+        self.frame_id = int(frame_df["frameId"].iloc[0])
+        self.trace = trace_func(frame_df)  # should return a go.Scatter
         self.row = row
         self.col = col
 
 
+def build_trace_configs(
+    play_df: pd.DataFrame,
+    trace_func: Callable[[pd.DataFrame], go.Scatter],
+    row: int = 1,
+    col: int = 1,
+) -> List[TraceConfig]:
+    """
+    Build TraceConfig objects for each frame.
+    """
+    configs: List[TraceConfig] = []
+    for fid, df in play_df.groupby("frameId", sort=True):
+        configs.append(
+            TraceConfig(frame_df=df, trace_func=trace_func, row=row, col=col)
+        )
+    return configs
+
+
+# --------------------------
+# Animator
+# --------------------------
 class PlayAnimator:
-    """Handles the creation of an animated play figure with traces for players and ball carrier speed."""
+    """Creates an animated play figure with traces spanning multiple subplots."""
 
     def __init__(
         self,
-        field: Field = None,
-        animation_config: dict = None,
-        trace_configs: List[TraceConfig] = None,
+        field: Field,
+        animation_config: Optional[dict] = None,
+        trace_configs: Optional[List[TraceConfig]] = None,
     ):
+        if field is None:
+            raise ValueError("Field must be provided to create the animation.")
+
         self.field = field
-        self.animation_config = animation_config or {}
+        self.animation_config = animation_config
         self.trace_configs = trace_configs
-        # Group trace configs by frame ID before creating frames
-        self.frame_configs = self._group_trace_configs(trace_configs)
+
+        self.frame_configs = self._group_trace_configs(self.trace_configs)
         self.frames = self._create_frames(self.frame_configs)
 
     def _group_trace_configs(
         self, trace_configs: List[TraceConfig]
     ) -> Dict[int, List[TraceConfig]]:
-        """Groups trace configs by frame ID to maintain subplot relationships."""
-        frame_configs = {}
+        frame_configs: Dict[int, List[TraceConfig]] = {}
         for config in trace_configs:
-            if config.frame_id not in frame_configs:
-                frame_configs[config.frame_id] = []
-            frame_configs[config.frame_id].append(config)
+            frame_configs.setdefault(config.frame_id, []).append(config)
         return frame_configs
+
+    def _axis_names_for_cell(self, row: int, col: int) -> Tuple[str, str]:
+        """
+        Map (row, col) -> ('x' or 'xN', 'y' or 'yN') for frames.
+        make_subplots names axes left-to-right, top-to-bottom:
+          index = (row-1)*subplot_cols + col
+        """
+        idx = (row - 1) * self.field.subplot_cols + col
+        xaxis = "x" if idx == 1 else f"x{idx}"
+        yaxis = "y" if idx == 1 else f"y{idx}"
+        return xaxis, yaxis
+
+    def _clone_scatter_with_axes(
+        self, trace: go.Scatter, row: int, col: int
+    ) -> go.Scatter:
+        """Return a new Scatter with the correct subplot xaxis/yaxis assigned."""
+        xaxis, yaxis = self._axis_names_for_cell(row, col)
+        # Construct a new Scatter; reuse common properties
+        return go.Scatter(
+            x=trace.x,
+            y=trace.y,
+            mode=trace.mode,
+            marker=trace.marker,
+            line=getattr(trace, "line", None),
+            text=getattr(trace, "text", None),
+            textposition=getattr(trace, "textposition", None),
+            textfont=getattr(trace, "textfont", None),
+            hoverinfo=getattr(trace, "hoverinfo", None),
+            showlegend=getattr(trace, "showlegend", False),
+            name=getattr(trace, "name", None),
+            xaxis=xaxis,
+            yaxis=yaxis,
+        )
 
     def _create_frames(
         self, frame_configs: Dict[int, List[TraceConfig]]
     ) -> List[go.Frame]:
-        """Creates frames ensuring traces maintain their subplot positions."""
-        frames = []
-
-        # Sort frame IDs to ensure proper sequence
-        frame_ids = sorted(frame_configs.keys())
-
-        for frame_id in frame_ids:
+        frames: List[go.Frame] = []
+        for frame_id in sorted(frame_configs.keys()):
             configs = frame_configs[frame_id]
-            frame_data = []
-
-            # Create traces with their subplot assignments
-            for config in configs:
-                trace = config.trace
-                # Clone trace to avoid modifying original
-                frame_trace = go.Scatter(
-                    x=trace.x,
-                    y=trace.y,
-                    mode=trace.mode,
-                    marker=trace.marker,
-                    text=trace.text,
-                    textposition=trace.textposition,
-                    textfont=trace.textfont,
-                    hoverinfo=trace.hoverinfo,
-                    showlegend=trace.showlegend,
-                    name=trace.name,
-                    xaxis=f"x{config.col}" if config.col > 1 else "x",
-                    yaxis=f"y{config.row}" if config.row > 1 else "y",
-                )
-                frame_data.append(frame_trace)
-
+            frame_data = [
+                self._clone_scatter_with_axes(cfg.trace, cfg.row, cfg.col)
+                for cfg in configs
+            ]
             frames.append(go.Frame(data=frame_data, name=str(frame_id)))
-
         return frames
 
     def create_animation(self) -> go.Figure:
-        """Creates the animated play figure with traces for players and ball carrier speed."""
-        if not self.field:
-            raise ValueError("Field must be provided to create the animation.")
-
         fig = self.field.field_fig
 
-        # Add initial traces with correct subplot positioning
-        first_frame_configs = self.frame_configs[min(self.frame_configs.keys())]
-        for config in first_frame_configs:
-            fig.add_trace(config.trace, row=config.row, col=config.col)
+        # Add initial traces in the right subplots
+        first_fid = min(self.frame_configs.keys())
+        for cfg in self.frame_configs[first_fid]:
+            fig.add_trace(cfg.trace, row=cfg.row, col=cfg.col)
 
-        # Add frames to the figure
+        # Attach frames
         fig.frames = self.frames
 
         return animate_play(fig, self.frames, config=self.animation_config)
-
-
-def build_trace_configs(
-    play_df: pd.DataFrame, trace_func: Callable, row: int = 1, col: int = 1
-) -> List[TraceConfig]:
-    """Builds trace configurations for the animated play DataFrame.
-
-    Args:
-        animate_play_df (pd.DataFrame): The DataFrame containing the animated play data.
-
-    Returns:
-        List[TraceConfig]: A list of TraceConfig objects for the animation.
-    """
-    trace_configs = (
-        play_df.groupby("frameId")
-        .apply(
-            lambda df: TraceConfig(
-                frame_df=df,
-                trace_func=trace_func,
-                row=row,
-                col=col,
-            )
-        )
-        .to_list()
-    )
-
-    return trace_configs
