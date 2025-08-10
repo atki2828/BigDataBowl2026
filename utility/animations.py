@@ -1,3 +1,4 @@
+from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -196,26 +197,38 @@ class Field:
                 col=self.col,
             )
 
-        # Yard numbers
-        yard_numbers = list(range(10, 60, 10)) + list(range(50, 0, -10))
-        yard_positions = list(range(10, 110, 10))
-        for yard, x in zip(yard_numbers, yard_positions):
+        yard_positions = list(range(10, 111, 10))  # 10, 20, ..., 110
+
+        for x in yard_positions:
+            if x in (10, 110):
+                label, size = "G", 14
+            elif x <= 60:
+                label, size = str(x - 10), 12
+            else:
+                label, size = str(110 - x), 12
+
+            # bottom numbers
             self.field_fig.add_annotation(
                 x=x,
                 y=2,
-                text=str(yard),
+                text=label,
                 showarrow=False,
-                font=dict(size=12, color="black"),
+                font=dict(size=size, color="black"),
+                xanchor="center",
+                yanchor="middle",
                 row=self.row,
                 col=self.col,
             )
+            # top numbers (rotated)
             self.field_fig.add_annotation(
                 x=x,
                 y=field_width - 2,
-                text=str(yard),
+                text=label,
                 showarrow=False,
-                font=dict(size=12, color="black"),
+                font=dict(size=size, color="black"),
                 textangle=180,
+                xanchor="center",
+                yanchor="middle",
                 row=self.row,
                 col=self.col,
             )
@@ -258,21 +271,18 @@ class Field:
 # --------------------------
 # Trace plumbing
 # --------------------------
+@dataclass
 class TraceConfig:
-    def __init__(
-        self,
-        frame_df: pd.DataFrame,
-        trace_func: Callable[[pd.DataFrame], go.Scatter],
-        row: int = 1,
-        col: int = 1,
-    ):
-        """
-        Holds a single frame's trace and where it belongs in the subplot grid.
-        """
-        self.frame_id = int(frame_df["frameId"].iloc[0])
-        self.trace = trace_func(frame_df)  # should return a go.Scatter
-        self.row = row
-        self.col = col
+    frame_df: pd.DataFrame
+    trace_func: Callable[[pd.DataFrame], go.Scatter]
+    row: int = 1
+    col: int = 1
+    frame_id: int = field(init=False)
+    trace: go.Scatter = field(init=False)
+
+    def __post_init__(self):
+        self.frame_id = int(self.frame_df["frameId"].iloc[0])
+        self.trace = self.trace_func(self.frame_df)
 
 
 def build_trace_configs(
@@ -285,7 +295,7 @@ def build_trace_configs(
     Build TraceConfig objects for each frame.
     """
     configs: List[TraceConfig] = []
-    for fid, df in play_df.groupby("frameId", sort=True):
+    for _, df in play_df.groupby("frameId", sort=True):
         configs.append(
             TraceConfig(frame_df=df, trace_func=trace_func, row=row, col=col)
         )

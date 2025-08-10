@@ -75,45 +75,50 @@ def create_animation_df(
 
 
 def create_play_fig(
-    animate_play_df: pd.DataFrame, animation_config=animation_config
+    animate_play_df: pd.DataFrame, animation_config: Optional[dict] = None
 ) -> go.Figure:
-    """Creates a figure for the animated play using the provided DataFrame.
-
-    Args:
-        animate_play_df (pl.DataFrame): The DataFrame containing the animated play data.
-
-    Returns:
-        go.Figure: The created play figure.
     """
-    field = Field(play_df=animate_play_df)
-    gameplay_trace_configs = (
-        animate_play_df.groupby("frameId")
-        .apply(
-            lambda df: TraceConfig(
-                frame_df=df,
-                trace_func=gameplay_trace_func,
-            )
-        )
-        .to_list()
+    Creates a 1x2 subplot figure: field on (1,1) and a metric plot on (1,2),
+    animated over frameId using the PlayAnimator/TraceConfig pattern.
+    """
+    # 1) Field on left subplot (1,1); grid is 1 row x 2 columns
+    field = Field(
+        play_df=animate_play_df,
+        row=1,
+        col=1,
+        subplot_rows=1,
+        subplot_cols=1,
     )
 
-    ball_carrier_highlight_trace_configs = (
-        animate_play_df.groupby("frameId")
-        .apply(
-            lambda df: TraceConfig(
-                frame_df=df,
-                trace_func=ball_carrier_circle_trace_func,
-            )
-        )
-        .to_list()
+    # 2) Build traces for each frame + target subplot cell
+    gameplay_trace_configs = build_trace_configs(
+        play_df=animate_play_df,
+        trace_func=gameplay_trace_func,  # returns go.Scatter of positions
+        row=1,
+        col=1,
     )
 
-    trace_configs = gameplay_trace_configs + ball_carrier_highlight_trace_configs
+    ball_carrier_circle_trace_configs = build_trace_configs(
+        play_df=animate_play_df,
+        trace_func=ball_carrier_circle_trace_func,  # returns go.Scatter (marker circle)
+        row=1,
+        col=1,
+    )
+
+    # 3) Concatenate all trace configs
+    trace_configs = (
+        gameplay_trace_configs
+        + ball_carrier_circle_trace_configs
+        + ball_carrier_circle_trace_configs
+    )
+
+    # 4) Animate
     play_fig = PlayAnimator(
         field=field,
         animation_config=animation_config,
         trace_configs=trace_configs,
     ).create_animation()
+
     return play_fig
 
 
@@ -152,7 +157,7 @@ def create_play_metric_fig(
         all_df=animate_play_df, x_col="frameId", y_col="bcs", name="Ball Carrier Speed"
     )
 
-    ball_carrier_circle_trace_configs = build_trace_configs(
+    ball_carrier_metric_trace_configs = build_trace_configs(
         play_df=animate_play_df,
         trace_func=speed_metric_trace_func,
         row=1,
@@ -162,7 +167,7 @@ def create_play_metric_fig(
     trace_configs = (
         gameplay_trace_configs
         + ball_carrier_circle_trace_configs
-        + ball_carrier_circle_trace_configs
+        + ball_carrier_metric_trace_configs
     )
 
     # 4) Animate
@@ -192,6 +197,15 @@ def main():
     # Transform Data to Create animate_play_df
     animate_play_df = create_animation_df(track_df, plays_df, GAME_ID, PLAY_ID)
 
+    # Create Play Animation Figure
+    play_fig = create_play_fig(
+        animate_play_df.to_pandas(), animation_config=animation_config
+    )
+    play_fig.write_html(
+        os.path.join(write_dir, f"game_{GAME_ID}_play_{PLAY_ID}_animation.html"),
+        include_plotlyjs="cdn",
+        auto_play=False,
+    )
     play_metric_fig = create_play_metric_fig(
         animate_play_df.to_pandas(), animation_config=animation_config
     )
