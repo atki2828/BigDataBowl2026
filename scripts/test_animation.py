@@ -1,12 +1,15 @@
+"""
+This script tests the Classes and Metods for creating dynamic play animations in plotly
+"""
+
 import os
-from functools import partial
-from typing import List, Optional
+from typing import Optional
 
 import pandas as pd
 import plotly.graph_objects as go
 import polars as pl
 
-from utility.animations import Field, PlayAnimator, TraceConfig, build_trace_configs
+from utility.animations import Field, PlayAnimator, build_trace_configs
 from utility.tracebuilders import (
     ball_carrier_circle_trace_func,
     build_metric_trace_func,
@@ -14,38 +17,19 @@ from utility.tracebuilders import (
 )
 from utility.transformations import join_track_play_df
 
-tracking_file_path = "./data/bigdatabowl2024/tracking_week_1.csv"
+tracking_file_path = "./data/bigdatabowl2024/tracking_week_2.csv"
 play_df_file_path = "./data/bigdatabowl2024/plays.csv"
 write_dir = "./animations/"
 animation_config = {
-    "duration": 33,  # ~30 fps (super smooth)
-    "redraw": False,  # reuse traces
+    "duration": 30,
+    "redraw": False,
     "slider_prefix": "Frame: ",
     "play_label": "▶",
     "pause_label": "⏸",
 }
 
-PLAY_ID = 2329
-GAME_ID = 2022091106
-
-
-def make_cumulative_metric_trace_func(all_df, x_col, y_col, name):
-    all_df = all_df.sort_values(x_col)
-
-    def trace_func(frame_df: pd.DataFrame) -> go.Scatter:
-        fid = int(frame_df["frameId"].iloc[0])
-        sub = all_df[all_df["frameId"] <= fid]
-        tr = go.Scatter(
-            x=sub[x_col].to_numpy(),
-            y=sub[y_col].to_numpy(),
-            mode="lines",
-            name=name,
-            showlegend=True,
-        )
-        tr.uid = "bcs_line"
-        return tr
-
-    return trace_func
+PLAY_ID = 2238
+GAME_ID = 2022091811
 
 
 def create_animation_df(
@@ -61,10 +45,15 @@ def create_animation_df(
     Returns:
         pl.DataFrame: Combined DataFrame ready for animation.
     """
-    all_plays_df = join_track_play_df(track_df, play_df)
-    animate_play_df = all_plays_df.filter(
+    # Filter Prejoin For Speedier Operation
+    track_df_filtered = track_df.filter(
         (pl.col("gameId") == game_id) & (pl.col("playId") == play_id)
     )
+    play_df_filtered = play_df.filter(
+        (pl.col("gameId") == game_id) & (pl.col("playId") == play_id)
+    )
+    animate_play_df = join_track_play_df(track_df_filtered, play_df_filtered)
+
     ball_carrier_df = animate_play_df.filter(
         pl.col("nflId") == pl.col("ballCarrierId")
     ).select(["gameId", "playId", "frameId", pl.col("s").alias("bcs")])
@@ -106,11 +95,7 @@ def create_play_fig(
     )
 
     # 3) Concatenate all trace configs
-    trace_configs = (
-        gameplay_trace_configs
-        + ball_carrier_circle_trace_configs
-        + ball_carrier_circle_trace_configs
-    )
+    trace_configs = gameplay_trace_configs + ball_carrier_circle_trace_configs
 
     # 4) Animate
     play_fig = PlayAnimator(
@@ -153,8 +138,8 @@ def create_play_metric_fig(
         col=1,
     )
 
-    speed_metric_trace_func = make_cumulative_metric_trace_func(
-        all_df=animate_play_df, x_col="frameId", y_col="bcs", name="Ball Carrier Speed"
+    speed_metric_trace_func = build_metric_trace_func(
+        play_df=animate_play_df, x_col="frameId", y_col="bcs", name="Ball Carrier Speed"
     )
 
     ball_carrier_metric_trace_configs = build_trace_configs(
@@ -176,16 +161,6 @@ def create_play_metric_fig(
         animation_config=animation_config,
         trace_configs=trace_configs,
     ).create_animation()
-
-    min_f, max_f = int(animate_play_df["frameId"].min()), int(
-        animate_play_df["frameId"].max()
-    )
-    ymin, ymax = animate_play_df["bcs"].min(), animate_play_df["bcs"].max()
-    pad = 0.05 * max(1e-9, ymax - ymin)  # avoid zero-width
-
-    play_metric_fig.update_xaxes(range=[min_f, max_f], row=1, col=2)
-    play_metric_fig.update_yaxes(range=[ymin - pad, ymax + pad], row=1, col=2)
-
     return play_metric_fig
 
 

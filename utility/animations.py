@@ -1,86 +1,43 @@
-from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional, Tuple, Union
+"""This module provides utilities for creating animations of NFL plays using Plotly."""
 
-import numpy as np
+from __future__ import annotations
+
+import math
+from collections import defaultdict
+from dataclasses import dataclass, field
+from typing import Callable, Dict, Iterable, List, Optional, Tuple, Union
+
 import pandas as pd
 import plotly.graph_objects as go
-import polars as pl
+from plotly.basedatatypes import BaseTraceType
 from plotly.subplots import make_subplots
 
 from .colors import nfl_colors
 
+Number = Union[int, float]
 
-def animate_play(
-    fig: go.Figure, frames: List[go.Frame], config: dict = None
-) -> go.Figure:
 
-    if not fig.data and frames:
-        fig.add_traces(frames[0].data)
-    config = config or {}
-    fig.frames = frames
+def _is_num(x) -> bool:
+    """Check if x is a number (int or float) and not NaN."""
+    try:
+        return (
+            x is not None
+            and not (isinstance(x, float) and math.isnan(x))
+            and isinstance(float(x), (int, float))
+        )
+    except Exception:
+        return False
 
-    fig.update_layout(
-        margin=dict(b=140),  # extra bottom margin for buttons + slider
-        updatemenus=[
-            {
-                "type": "buttons",
-                "buttons": [
-                    {
-                        "label": config.get("play_label", "Play"),
-                        "method": "animate",
-                        "args": [
-                            None,
-                            {
-                                "frame": {
-                                    "duration": config.get("duration", 33),
-                                    "redraw": config.get("redraw", False),
-                                },
-                                "transition": {"duration": 0},
-                                "fromcurrent": True,
-                            },
-                        ],
-                    },
-                    {
-                        "label": config.get("pause_label", "Pause"),
-                        "method": "animate",
-                        "args": [[None], {"mode": "immediate"}],
-                    },
-                ],
-                "direction": "left",
-                "x": 0.05,
-                "y": -0.23,  # further down, under the slider
-                "xanchor": "center",
-                "yanchor": "top",
-                "showactive": False,
-            }
-        ],
-        sliders=[
-            {
-                "steps": [
-                    {
-                        "method": "animate",
-                        "args": [
-                            [f.name],
-                            {
-                                "mode": "immediate",
-                                "frame": {
-                                    "duration": config.get("duration", 33),
-                                    "redraw": config.get("redraw", False),
-                                },
-                                "transition": {"duration": 0},
-                            },
-                        ],
-                        "label": f.name,
-                    }
-                    for f in frames
-                ],
-                "x": 0.1,
-                "y": -0.12,  # keep slider just below plot
-                "currentvalue": {"prefix": config.get("slider_prefix", "Frame: ")},
-            }
-        ],
-    )
-    return fig
+
+def _flatten_numeric(arr: Iterable) -> List[float]:
+    """Flatten an iterable and return only numeric values as floats."""
+    if arr is None:
+        return []
+    out = []
+    for v in arr:
+        if _is_num(v):
+            out.append(float(v))
+    return out
 
 
 # --------------------------
@@ -274,11 +231,11 @@ class Field:
 @dataclass
 class TraceConfig:
     frame_df: pd.DataFrame
-    trace_func: Callable[[pd.DataFrame], go.Scatter]
+    trace_func: Callable[[pd.DataFrame], BaseTraceType]
     row: int = 1
     col: int = 1
     frame_id: int = field(init=False)
-    trace: go.Scatter = field(init=False)
+    trace: BaseTraceType = field(init=False)
 
     def __post_init__(self):
         self.frame_id = int(self.frame_df["frameId"].iloc[0])
@@ -287,7 +244,7 @@ class TraceConfig:
 
 def build_trace_configs(
     play_df: pd.DataFrame,
-    trace_func: Callable[[pd.DataFrame], go.Scatter],
+    trace_func: Callable[[pd.DataFrame], BaseTraceType],
     row: int = 1,
     col: int = 1,
 ) -> List[TraceConfig]:
@@ -306,37 +263,59 @@ def build_trace_configs(
 # Animator
 # --------------------------
 class PlayAnimator:
-    """Creates an animated play figure with traces spanning multiple subplots."""
+    """
+    Creates an animated play figure with traces spanning multiple subplots.
+    - Groups provided TraceConfig by frameId
+    - Builds plotly Frames
+    - Sets per-subplot axis ranges automatically, with optional overrides
+    """
 
     def __init__(
         self,
-        field: Field,
+        field: "Field",
         animation_config: Optional[dict] = None,
-        trace_configs: Optional[List[TraceConfig]] = None,
+        trace_configs: Optional[List["TraceConfig"]] = None,
+        *,
+        pad_ratio: float = 0.05,
+        fixed_axis: Optional[
+            Dict[Tuple[int, int], Dict[str, Tuple[Number, Number]]]
+        ] = None,
     ):
+        """
+        Args:
+            field: Field instance (provides .field_fig, .subplot_cols, .play_df, etc.)
+            animation_config: dict with duration/redraw/labels, etc.
+            trace_configs: list of TraceConfig(trace: go.Scatter, frame_id: int, row: int, col: int)
+            pad_ratio: padding fraction for inferred y-range (and x-range if inferred from trace data)
+            fixed_axis: optional per-cell axis overrides, keyed by (row, col) -> {"x": (min,max), "y": (min,max)}
+        """
         if field is None:
             raise ValueError("Field must be provided to create the animation.")
 
         self.field = field
-        self.animation_config = animation_config
-        self.trace_configs = trace_configs
+        self.animation_config = animation_config or {}
+        self.trace_configs = trace_configs or []
+
+        self.pad_ratio = pad_ratio
+        self.fixed_axis = fixed_axis or {}
 
         self.frame_configs = self._group_trace_configs(self.trace_configs)
         self.frames = self._create_frames(self.frame_configs)
 
+    # ---------- helpers ----------
+
     def _group_trace_configs(
-        self, trace_configs: List[TraceConfig]
-    ) -> Dict[int, List[TraceConfig]]:
-        frame_configs: Dict[int, List[TraceConfig]] = {}
-        for config in trace_configs:
-            frame_configs.setdefault(config.frame_id, []).append(config)
+        self, trace_configs: List["TraceConfig"]
+    ) -> Dict[int, List["TraceConfig"]]:
+        frame_configs: Dict[int, List["TraceConfig"]] = {}
+        for cfg in trace_configs:
+            frame_configs.setdefault(cfg.frame_id, []).append(cfg)
         return frame_configs
 
     def _axis_names_for_cell(self, row: int, col: int) -> Tuple[str, str]:
         """
-        Map (row, col) -> ('x' or 'xN', 'y' or 'yN') for frames.
-        make_subplots names axes left-to-right, top-to-bottom:
-          index = (row-1)*subplot_cols + col
+        Map (row, col) -> ('x' or 'xN', 'y' or 'yN') as used by make_subplots:
+          idx = (row-1)*subplot_cols + col
         """
         idx = (row - 1) * self.field.subplot_cols + col
         xaxis = "x" if idx == 1 else f"x{idx}"
@@ -346,14 +325,12 @@ class PlayAnimator:
     def _clone_scatter_with_axes(
         self, trace: go.Scatter, row: int, col: int
     ) -> go.Scatter:
-        """Return a new Scatter with the correct subplot xaxis/yaxis assigned."""
         xaxis, yaxis = self._axis_names_for_cell(row, col)
-        # Construct a new Scatter; reuse common properties
         return go.Scatter(
             x=trace.x,
             y=trace.y,
             mode=trace.mode,
-            marker=trace.marker,
+            marker=getattr(trace, "marker", None),
             line=getattr(trace, "line", None),
             text=getattr(trace, "text", None),
             textposition=getattr(trace, "textposition", None),
@@ -366,7 +343,7 @@ class PlayAnimator:
         )
 
     def _create_frames(
-        self, frame_configs: Dict[int, List[TraceConfig]]
+        self, frame_configs: Dict[int, List["TraceConfig"]]
     ) -> List[go.Frame]:
         frames: List[go.Frame] = []
         for frame_id in sorted(frame_configs.keys()):
@@ -378,15 +355,174 @@ class PlayAnimator:
             frames.append(go.Frame(data=frame_data, name=str(frame_id)))
         return frames
 
-    def create_animation(self) -> go.Figure:
-        fig = self.field.field_fig
+    # ---------- axis inference ----------
 
-        # Add initial traces in the right subplots
-        first_fid = min(self.frame_configs.keys())
-        for cfg in self.frame_configs[first_fid]:
-            fig.add_trace(cfg.trace, row=cfg.row, col=cfg.col)
+    def _infer_axis_ranges(
+        self,
+    ) -> Dict[Tuple[int, int], Dict[str, Tuple[float, float]]]:
+        """
+        Scan ALL traces across ALL frames by subplot cell, infer numeric x/y ranges.
+        If a cell has no numeric x but we have frames, fall back to [min(frameId), max(frameId)].
+        Apply pad_ratio around inferred ranges.
+        """
+        # collect numeric x/y by cell
+        by_cell = defaultdict(lambda: {"x": [], "y": []})
 
-        # Attach frames
+        # Prefer reading from all frame traces (so cumulative metric panes are covered)
+        for cfg in self.trace_configs:
+            if cfg.row == 1 and cfg.col == 1:
+                # Do not update axis on field and always put field in (1,1)
+                continue
+            if isinstance(cfg.trace, BaseTraceType):
+                xs = _flatten_numeric(cfg.trace.x)
+                ys = _flatten_numeric(cfg.trace.y)
+                if xs:
+                    by_cell[(cfg.row, cfg.col)]["x"].extend(xs)
+                if ys:
+                    by_cell[(cfg.row, cfg.col)]["y"].extend(ys)
+
+        inferred: Dict[Tuple[int, int], Dict[str, Tuple[float, float]]] = {}
+
+        min_fid = min(self.frame_configs.keys()) if self.frame_configs else None
+        max_fid = max(self.frame_configs.keys()) if self.frame_configs else None
+
+        for cell, vals in by_cell.items():
+            xr = None
+            yr = None
+
+            if vals["x"]:
+                xmin, xmax = min(vals["x"]), max(vals["x"])
+                pad = self.pad_ratio * max(1e-12, xmax - xmin)
+                xr = (xmin - pad, xmax + pad)
+            elif min_fid is not None and max_fid is not None:
+                # fallback to frameId range
+                xr = (float(min_fid), float(max_fid))
+
+            if vals["y"]:
+                ymin, ymax = min(vals["y"]), max(vals["y"])
+                pad = self.pad_ratio * max(1e-12, ymax - ymin)
+                yr = (ymin - pad, ymax + pad)
+
+            rngs = {}
+            if xr is not None:
+                rngs["x"] = xr
+            if yr is not None:
+                rngs["y"] = yr
+
+            if rngs:
+                inferred[cell] = rngs
+
+        # apply explicit overrides last
+        for cell, axes in self.fixed_axis.items():
+            if cell not in inferred:
+                inferred[cell] = {}
+            for axis_name, rng in axes.items():
+                inferred[cell][axis_name] = (float(rng[0]), float(rng[1]))
+
+        return inferred
+
+    def _apply_axis_ranges(self, fig: go.Figure) -> None:
+        rngs = self._infer_axis_ranges()
+        for (row, col), axes in rngs.items():
+            if "x" in axes:
+                fig.update_xaxes(range=list(axes["x"]), row=row, col=col)
+            if "y" in axes:
+                fig.update_yaxes(range=list(axes["y"]), row=row, col=col)
+
+    # ---------- private animate ----------
+
+    def _animate_play(self, fig: go.Figure) -> go.Figure:
+        """
+        Internal method that wires buttons/slider and attaches frames.
+        Mirrors your previous animate_play(), driven by self.animation_config.
+        """
+        cfg = self.animation_config or {}
+        if not fig.data and self.frames:
+            fig.add_traces(self.frames[0].data)
+
         fig.frames = self.frames
 
-        return animate_play(fig, self.frames, config=self.animation_config)
+        fig.update_layout(
+            margin=dict(b=140),
+            updatemenus=[
+                {
+                    "type": "buttons",
+                    "buttons": [
+                        {
+                            "label": cfg.get("play_label", "Play"),
+                            "method": "animate",
+                            "args": [
+                                None,
+                                {
+                                    "frame": {
+                                        "duration": cfg.get("duration", 33),
+                                        "redraw": cfg.get("redraw", False),
+                                    },
+                                    "transition": {"duration": 0},
+                                    "fromcurrent": True,
+                                },
+                            ],
+                        },
+                        {
+                            "label": cfg.get("pause_label", "Pause"),
+                            "method": "animate",
+                            "args": [[None], {"mode": "immediate"}],
+                        },
+                    ],
+                    "direction": "left",
+                    "x": 0.05,
+                    "y": -0.23,
+                    "xanchor": "center",
+                    "yanchor": "top",
+                    "showactive": False,
+                }
+            ],
+            sliders=[
+                {
+                    "steps": [
+                        {
+                            "method": "animate",
+                            "args": [
+                                [f.name],
+                                {
+                                    "mode": "immediate",
+                                    "frame": {
+                                        "duration": cfg.get("duration", 33),
+                                        "redraw": cfg.get("redraw", False),
+                                    },
+                                    "transition": {"duration": 0},
+                                },
+                            ],
+                            "label": f.name,
+                        }
+                        for f in self.frames
+                    ],
+                    "x": 0.1,
+                    "y": -0.12,
+                    "currentvalue": {"prefix": cfg.get("slider_prefix", "Frame: ")},
+                }
+            ],
+        )
+        return fig
+
+    # ---------- public API ----------
+
+    def create_animation(self) -> go.Figure:
+        """
+        Returns a fully wired animation figure with axis ranges set per subplot.
+        """
+        fig = self.field.field_fig
+
+        # Add initial traces in the correct subplots
+        if self.frame_configs:
+            first_fid = min(self.frame_configs.keys())
+            for cfg in self.frame_configs[first_fid]:
+                fig.add_trace(cfg.trace, row=cfg.row, col=cfg.col)
+
+        # Attach frames and controls
+        fig = self._animate_play(fig)
+
+        # Auto ranges (with optional overrides)
+        self._apply_axis_ranges(fig)
+
+        return fig
