@@ -23,3 +23,10 @@ dependencies = [
 dev = [
     "pytest>=8.4.1",
 ]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["utility"]
+
+[tool.isort]
+profile = "black"
