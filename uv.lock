@@ -132,7 +132,7 @@ wheels = [
 [[package]]
 name = "bigdatabowl2026"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "jupyter" },
     { name = "jupyterlab" },
