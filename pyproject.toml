@@ -14,6 +14,7 @@ dependencies = [
     "scikit-learn",
     "jupyterlab>=4.4.5",
     "pyarrow>=21.0.0",
+    "databricks-sql-connector>=4.0.5",
 ]
 
 [build-system]
@@ -29,4 +30,13 @@ include = ["utility*"]
 [dependency-groups]
 dev = [
     "pytest>=8.4.1",
+
 ]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["utility"]
+
+[tool.isort]
+profile = "black"
+
