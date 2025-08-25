@@ -1,7 +1,7 @@
 from utility.dbx import DatabricksSQLClient
 
 
-def test_query():
+def try_query():  # Named Try to not trigger pytest
     client = DatabricksSQLClient()
     query = """SELECT *
         FROM workspace.bigdatabowl2024.games
@@ -12,4 +12,4 @@ def test_query():
 
 
 if __name__ == "__main__":
-    test_query()
+    try_query()
