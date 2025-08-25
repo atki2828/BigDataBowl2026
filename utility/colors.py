@@ -1,3 +1,5 @@
+"""Mappings of NFL team colors to hex color codes."""
+
 nfl_colors = {
     "ARI": "#97233F",  # Arizona Cardinals
     "ATL": "#A71930",  # Atlanta Falcons
@@ -27,9 +29,9 @@ nfl_colors = {
     "PHI": "#004C54",  # Philadelphia Eagles
     "PIT": "#FFB612",  # Pittsburgh Steelers
     "SEA": "#002244",  # Seattle Seahawks
-    "SF": "#AA0000",  # San Francisco 49ers
+    "SF": "#C9243F",  # San Francisco 49ers
     "TB": "#D50A0A",  # Tampa Bay Buccaneers
     "TEN": "#0C2340",  # Tennessee Titans
     "WAS": "#773141",  # Wash
-    "LA": "blue",
+    "LA": "#003594",
 }
