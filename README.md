@@ -62,4 +62,50 @@ uv run python Hello.
 ```
 
 
-If the script runs and prints stuff, you know you are setup correctly.
+## 🔐 How to Get Your Databricks Credentials
+
+### **1. Generate a Personal Access Token**
+1. After logging into the workspace, click your **user icon → User Settings**.  
+2. Go to the **Access tokens** tab.  
+3. Click **Generate new token** and copy it.  
+4. Save this somewhere safe — you’ll need it for connecting with the REST API or Python/SQL connectors.  
+
+---
+
+### **2. Find Your Hostname and HTTP Path**
+1. Go to your **Databricks workspace**.  
+2. In the left sidebar, click **SQL Warehouses** (or **Clusters** if you’re using classic clusters).  
+3. Choose the warehouse/cluster you’ll connect to.  
+4. Click the **Connection details** tab.  
+   - **DATABRICKS_SERVER_HOSTNAME** will look like:  
+     ```
+     adb-123456789012345.7.azuredatabricks.net
+     ```  
+   - **DATABRICKS_HTTP_PATH** will look like:  
+     ```
+     /sql/1.0/warehouses/abcdef1234567890
+     ```  
+
+---
+
+### **3. Set Environment Variables**
+
+#### On **Linux / macOS (bash/zsh)**
+```bash
+export DATABRICKS_SERVER_HOSTNAME="adb-123456789012345.7.azuredatabricks.net"
+export DATABRICKS_HTTP_PATH="/sql/1.0/warehouses/abcdef1234567890"
+export DATABRICKS_TOKEN="paste-your-token-here"
+```
+
+#### On **Windows (PowerShell)**
+```powershell
+setx DATABRICKS_SERVER_HOSTNAME "adb-123456789012345.7.azuredatabricks.net"
+setx DATABRICKS_HTTP_PATH "/sql/1.0/warehouses/abcdef1234567890"
+setx DATABRICKS_TOKEN "paste-your-token-here"
+```
+
+### To test working run 
+```python
+uv run .\tests\test_dbx.py
+```
+**This should return a polars df of shape (4,9)**
