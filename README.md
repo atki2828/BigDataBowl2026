@@ -32,4 +32,34 @@ source .venv/bin/activate
 uv run python Hello.py
 ```
 
+
+
+## 🖥️ Windows Setup Instructions
+
+### **1. Clone the Repository**
+```powershell
+git clone https://github.com/YOUR-USERNAME/BigDataBowl2026.git
+cd BigDataBowl2026
+```   
+
+### **2. Install uv (Dependency Manager)**
+```powershell
+irm https://astral.sh/uv/install.ps1 | iex
+```
+
+### **3. Setup Environment**
+```powershell
+uv sync
+```
+### **4. Activate Virtual Environment**
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+### **5. Run a Test Script**
+```powershell
+uv run python Hello.
+```
+
+
 If the script runs and prints stuff, you know you are setup correctly.
