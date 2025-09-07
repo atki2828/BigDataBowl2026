@@ -8,7 +8,7 @@ def join_track_play_df(
     track_df: pl.DataFrame,
     play_df: pl.DataFrame,
 ) -> pl.DataFrame:
-    return track_df.join(play_df, on=["gameId", "playId"], how="inner")
+    return track_df.join(play_df, on=["gameId", "playId"], how="left")
 
 
 def merge_trace_dicts(*dicts: dict) -> dict:
