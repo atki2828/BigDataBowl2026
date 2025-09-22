@@ -1,7 +1,8 @@
 # 2024
 ## The Impact of Setting the Edge on Zone Run Plays** 
 **Summary**
-Looks at setting the edge on zone run plays and create statistic **Edge Intensity**.   
+Looks at setting the edge on zone run plays and create statistic **Edge Intensity**.
+https://operations.nfl.com/gameday/analytics/big-data-bowl/2024-big-data-bowl-winner-and-finalists/   
 
 https://www.kaggle.com/code/devinbasley26/no-edge-no-chance?scriptVersionId=158207073
 
@@ -20,3 +21,7 @@ https://www.kaggle.com/code/devinbasley26/no-edge-no-chance?scriptVersionId=1582
 * Edge setter's have to meet certain criteria to be identified as edge setters
 * Made up of multiple metrics 
 ![alt text](image-1.png)
+
+
+## Spatioal Density Estimation for Tackles: EYS & PFI
+https://www.kaggle.com/code/nickb1125/spatial-density-estimation-for-tackles-eys-pfi?scriptVersionId=161830638
