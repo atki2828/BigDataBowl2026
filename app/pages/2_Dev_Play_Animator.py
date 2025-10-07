@@ -1,15 +1,59 @@
+from typing import Optional
+
+import plotly.graph_objects as go
 import polars as pl
+import pandas as pd
 import streamlit as st
 
+from utility.animations import Field, PlayAnimator, build_trace_configs
 from utility.dbx import DatabricksSQLClient
+from utility.tracebuilders import (
+
+    gameplay_trace_func
+)
 
 databricks_client = DatabricksSQLClient()
 
 st.sidebar.title("Big Data Bowl Explorer")
 
 
-import polars as pl
-import streamlit as st
+
+
+def create_play_fig(
+    animate_play_df: pd.DataFrame, animation_config: Optional[dict] = None
+) -> go.Figure:
+    """
+    Creates a 1x2 subplot figure: field on (1,1) and a metric plot on (1,2),
+    animated over frameId using the PlayAnimator/TraceConfig pattern.
+    """
+    # 1) Field on left subplot (1,1); grid is 1 row x 2 columns
+    field = Field(
+        play_df=animate_play_df,
+        row=1,
+        col=1,
+        subplot_rows=1,
+        subplot_cols=1,
+    )
+
+    # 2) Build traces for each frame + target subplot cell
+    gameplay_trace_configs = build_trace_configs(
+        play_df=animate_play_df,
+        trace_func=gameplay_trace_func,  # returns go.Scatter of positions
+        row=1,
+        col=1,
+    )
+
+    # 3) Concatenate all trace configs
+    trace_configs = gameplay_trace_configs + 
+
+    # 4) Animate
+    play_fig = PlayAnimator(
+        field=field,
+        animation_config=animation_config,
+        trace_configs=trace_configs,
+    ).create_animation()
+
+    return play_fig
 
 
 # --- Query Helpers ---
@@ -55,8 +99,11 @@ def build_animation_query(game_id: int, play_id: int) -> str:
         SELECT *
         FROM workspace.bigdatabowl2026.input_data
         WHERE game_id = {game_id} AND play_id = {play_id}
-        ORDER BY frame_id, nfl_id
     """
+
+
+def animate_play(play_df: pl.DataFrame):
+    pass
 
 
 # --- Main App ---
@@ -71,10 +118,10 @@ def main(databricks_client):
     else:
         st.success(f"Selected Game ID: {game_id}")
         st.success(f"Selected Play ID: {play_id}")
-        # TODO: Add your animation/visualization logic here
-
         animation_query = build_animation_query(game_id, play_id)
         animation_df = databricks_client.query_to_pl(animation_query)
+
+        # TODO: Add your animation/visualization logic here
 
         # Example: Display the animation data as a table
         st.dataframe(animation_df.sample(10))
