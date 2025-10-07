@@ -1,22 +1,25 @@
 from typing import Optional
 
+import pandas as pd
 import plotly.graph_objects as go
 import polars as pl
-import pandas as pd
 import streamlit as st
 
 from utility.animations import Field, PlayAnimator, build_trace_configs
 from utility.dbx import DatabricksSQLClient
-from utility.tracebuilders import (
-
-    gameplay_trace_func
-)
+from utility.tracebuilders import gameplay_trace_func_26
 
 databricks_client = DatabricksSQLClient()
 
 st.sidebar.title("Big Data Bowl Explorer")
 
-
+animation_config = {
+    "duration": 30,
+    "redraw": False,
+    "slider_prefix": "Frame: ",
+    "play_label": "▶",
+    "pause_label": "⏸",
+}
 
 
 def create_play_fig(
@@ -38,13 +41,13 @@ def create_play_fig(
     # 2) Build traces for each frame + target subplot cell
     gameplay_trace_configs = build_trace_configs(
         play_df=animate_play_df,
-        trace_func=gameplay_trace_func,  # returns go.Scatter of positions
+        trace_func=gameplay_trace_func_26,  # returns go.Scatter of positions
         row=1,
         col=1,
     )
 
     # 3) Concatenate all trace configs
-    trace_configs = gameplay_trace_configs + 
+    trace_configs = gameplay_trace_configs
 
     # 4) Animate
     play_fig = PlayAnimator(
@@ -96,14 +99,27 @@ def get_play_id(databricks_client, game_id: int | None):
 def build_animation_query(game_id: int, play_id: int) -> str:
     """Construct SQL query to fetch animation data for a specific game and play."""
     return f"""
-        SELECT *
-        FROM workspace.bigdatabowl2026.input_data
-        WHERE game_id = {game_id} AND play_id = {play_id}
+   SELECT 
+        input_data.game_id as gameId,
+        input_data.play_id as playId,
+        input_data.player_to_predict as PlayerToPredict,
+        input_data.nfl_id as nflId,
+        input_data.frame_id as frameId,
+        input_data.absolute_yardline_number as absoluteYardlineNumber,
+        input_data.play_direction as playDirection,
+        input_data.player_position as playerPosition,
+        input_data.player_side as playerSide,
+        input_data.player_role as playerRole,
+        supplementary_data.yards_to_go as yardsToGo,
+        input_data.x as x,
+        input_data.y as y
+        FROM workspace.bigdatabowl2026.input_data input_data inner JOIN
+            workspace.bigdatabowl2026.supplementary_data supplementary_data ON input_data.game_id = supplementary_data.game_id 
+            AND input_data.play_id = supplementary_data.play_id
+        WHERE supplementary_data.game_id = {game_id}
+        AND supplementary_data.play_id = {play_id}
+
     """
-
-
-def animate_play(play_df: pl.DataFrame):
-    pass
 
 
 # --- Main App ---
@@ -120,6 +136,9 @@ def main(databricks_client):
         st.success(f"Selected Play ID: {play_id}")
         animation_query = build_animation_query(game_id, play_id)
         animation_df = databricks_client.query_to_pl(animation_query)
+        fig = create_play_fig(animation_df.to_pandas(), animation_config)
+        st.title("Play Animation Demo")
+        st.plotly_chart(fig, use_container_width=True)
 
         # TODO: Add your animation/visualization logic here
 

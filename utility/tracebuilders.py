@@ -5,7 +5,7 @@ from typing import Callable
 import pandas as pd
 import plotly.graph_objects as go
 
-from .colors import nfl_colors
+from .colors import nfl_colors, player_role_colors
 
 
 def ball_carrier_speed_trace_func(df: pd.DataFrame) -> go.Scatter:
@@ -177,3 +177,54 @@ def build_metric_trace_func(
         return tr
 
     return trace_func
+
+
+def gameplay_trace_func_26(
+    frame_df: pd.DataFrame, player_role_colors: dict = player_role_colors
+) -> go.Scatter:
+    """Generates a Plotly trace for visualizing players and football positions for a single frame.
+
+    Args:
+        df (pd.DataFrame): DataFrame containing a single frame of player and football position data.
+            Must include 'x', 'y', 'displayName' columns, and for players:
+            'club', 'jerseyNumber'.
+        nfl_colors (dict, optional): Dictionary mapping NFL team codes to their
+            color hex codes. Defaults to predefined nfl_colors.
+
+    Returns:
+        go.Scatter: A single Plotly scatter trace containing all players and football positions
+    """
+
+    # Player positions and properties
+    player_x = frame_df["x"].tolist()
+    player_y = frame_df["y"].tolist()
+    player_colors = [
+        player_role_colors.get(role, "#888888") for role in frame_df["playerRole"]
+    ]
+    player_text = frame_df["playerPosition"].tolist()
+
+    x_positions = player_x
+    y_positions = player_y
+    marker_colors = player_colors
+    marker_sizes = [24] * len(player_x)
+    marker_line_widths = [1] * len(player_x)
+    marker_line_colors = ["white"] * len(player_x)
+    text = player_text
+
+    trace = go.Scatter(
+        x=x_positions,
+        y=y_positions,
+        mode="markers+text",
+        marker=dict(
+            color=marker_colors,
+            size=marker_sizes,
+            line=dict(width=marker_line_widths, color=marker_line_colors),
+        ),
+        text=text,
+        textposition="middle center",
+        textfont=dict(color="white", size=10),
+        hoverinfo="text",
+        showlegend=False,
+    )
+    trace.name = "gameplay_trace"
+    return trace
