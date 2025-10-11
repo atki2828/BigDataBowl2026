@@ -99,25 +99,11 @@ def get_play_id(databricks_client, game_id: int | None):
 def build_animation_query(game_id: int, play_id: int) -> str:
     """Construct SQL query to fetch animation data for a specific game and play."""
     return f"""
-   SELECT 
-        input_data.game_id as gameId,
-        input_data.play_id as playId,
-        input_data.player_to_predict as PlayerToPredict,
-        input_data.nfl_id as nflId,
-        input_data.frame_id as frameId,
-        input_data.absolute_yardline_number as absoluteYardlineNumber,
-        input_data.play_direction as playDirection,
-        input_data.player_position as playerPosition,
-        input_data.player_side as playerSide,
-        input_data.player_role as playerRole,
-        supplementary_data.yards_to_go as yardsToGo,
-        input_data.x as x,
-        input_data.y as y
-        FROM workspace.bigdatabowl2026.input_data input_data inner JOIN
-            workspace.bigdatabowl2026.supplementary_data supplementary_data ON input_data.game_id = supplementary_data.game_id 
-            AND input_data.play_id = supplementary_data.play_id
-        WHERE supplementary_data.game_id = {game_id}
-        AND supplementary_data.play_id = {play_id}
+  SELECT * 
+        FROM workspace.bigdatabowl2026.play_animation_data
+        WHERE gameId = {game_id}
+        AND playId = {play_id}
+        ORDER BY frameId DESC
 
     """
 
