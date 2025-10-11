@@ -108,6 +108,12 @@ def build_animation_query(game_id: int, play_id: int) -> str:
     """
 
 
+# TODO: Save Queries to sql folder
+# TODO: Create Additional Animation Functions From Lucid
+# TODO: Work on Animation Page Desgin/Layout
+# TODO: Add Animation Controls
+
+
 # --- Main App ---
 def main(databricks_client):
     st.title("Big Data Bowl Play Explorer")
