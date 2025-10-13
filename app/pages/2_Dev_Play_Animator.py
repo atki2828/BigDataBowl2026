@@ -1,20 +1,21 @@
-from typing import Optional
+from typing import Callable, Optional, Union
 
 import pandas as pd
 import plotly.graph_objects as go
 import polars as pl
 import streamlit as st
 
-from utility.animations import Field, PlayAnimator, build_trace_configs
+from utility.animations import Field, PlayAnimator, TraceConfig, build_trace_configs
+from utility.colors import player_role_colors
 from utility.dbx import DatabricksSQLClient
-from utility.tracebuilders import gameplay_trace_func_26
+from utility.tracebuilders import gameplay_trace_func_26, gameplay_trail_trace_func
 
 databricks_client = DatabricksSQLClient()
 
 st.sidebar.title("Big Data Bowl Explorer")
 
 animation_config = {
-    "duration": 30,
+    "duration": 150,
     "redraw": False,
     "slider_prefix": "Frame: ",
     "play_label": "▶",
@@ -46,9 +47,16 @@ def create_play_fig(
         col=1,
     )
 
-    # 3) Concatenate all trace configs
-    trace_configs = gameplay_trace_configs
+    trail_trace_configs = build_trace_configs(
+        play_df=animate_play_df,
+        trace_func=gameplay_trail_trace_func,  # returns go.Scatter of trails
+        row=1,
+        col=1,
+        trailing=True,
+    )
 
+    # 3) Concatenate all trace configs
+    trace_configs = gameplay_trace_configs + trail_trace_configs
     # 4) Animate
     play_fig = PlayAnimator(
         field=field,

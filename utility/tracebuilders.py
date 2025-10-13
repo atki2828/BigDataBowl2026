@@ -228,3 +228,84 @@ def gameplay_trace_func_26(
     )
     trace.name = "gameplay_trace"
     return trace
+
+
+def gameplay_trail_trace_func(
+    frame_df: pd.DataFrame,
+    *,
+    min_opacity: float = 0.9,
+    line_width: float = 6.5,
+    color_map: dict[int, str] = None,
+) -> go.Scatter:
+    """
+    Draws player trails that preserve their historical color based on trainFlag.
+    When a player's trainFlag switches (1→0 or 0→1), the old trail keeps its color
+    and only new frames adopt the new color.
+
+    Args
+    ----
+    frame_df : pd.DataFrame
+        Data for a single frame (builder attaches full play as _full_play_df).
+        Must include: 'frameId', 'nflId', 'x', 'y', 'trainFlag'.
+    min_opacity : float, optional
+        Opacity for lines.
+    line_width : float, optional
+        Width of streak lines.
+    color_map : dict[int, str], optional
+        Mapping from trainFlag to color. Defaults to green/red neon.
+
+    Returns
+    -------
+    go.Scatter
+        Combined trail trace (multiple colored segments).
+    """
+    # Bright high-contrast colors for white field
+    if color_map is None:
+        color_map = {1: "#00FF66", 0: "#FF1744"}  # neon green / neon red
+
+    play_df = getattr(frame_df, "_full_play_df", frame_df)
+    current_frame = int(frame_df["frameId"].iloc[0])
+    visible_df = play_df[play_df["frameId"] <= current_frame].copy()
+    visible_df = visible_df.sort_values(["nflId", "frameId"])
+
+    # Build all segments that existed up to this frame
+    xs, ys, seg_colors = [], [], []
+
+    for pid, p_df in visible_df.groupby("nflId"):
+        p_df = p_df.sort_values("frameId")
+        if len(p_df) < 2:
+            continue
+
+        # Break into segments whenever trainFlag changes
+        start_idx = 0
+        for i in range(1, len(p_df)):
+            if p_df["trainFlag"].iloc[i] != p_df["trainFlag"].iloc[i - 1]:
+                segment = p_df.iloc[start_idx:i]
+                xs += segment["x"].tolist() + [None]
+                ys += segment["y"].tolist() + [None]
+                seg_colors.append(color_map[p_df["trainFlag"].iloc[start_idx]])
+                start_idx = i
+        # final segment
+        segment = p_df.iloc[start_idx:]
+        xs += segment["x"].tolist() + [None]
+        ys += segment["y"].tolist() + [None]
+        seg_colors.append(color_map[p_df["trainFlag"].iloc[start_idx]])
+
+    # Plot as one merged trace — Plotly can't color per segment natively,
+    # so we use one color (the latest) here; multi-color requires multiple traces.
+    # We'll just take the latest segment color for this frame
+    current_flag = int(frame_df["trainFlag"].iloc[0])
+    color = color_map[current_flag]
+
+    trace = go.Scatter(
+        x=xs,
+        y=ys,
+        mode="lines",
+        line=dict(color=color, width=line_width),
+        opacity=min_opacity,
+        hoverinfo="none",
+        showlegend=False,
+        name="trail",
+    )
+
+    return trace

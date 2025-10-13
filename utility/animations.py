@@ -244,18 +244,49 @@ class TraceConfig:
 
 def build_trace_configs(
     play_df: pd.DataFrame,
-    trace_func: Callable[[pd.DataFrame], BaseTraceType],
+    trace_func: Callable,
+    *,
     row: int = 1,
     col: int = 1,
-) -> List[TraceConfig]:
+    trailing: bool = False,
+) -> List["TraceConfig"]:
     """
     Build TraceConfig objects for each frame.
+
+    Parameters
+    ----------
+    play_df : pd.DataFrame
+        Full play data containing frameId.
+    trace_func : callable
+        Function that takes a frame_df and returns a Plotly trace.
+    row, col : int
+        Subplot coordinates.
+    trailing : bool, optional
+        If False (default): pass only that frame's rows to trace_func.
+        If True: pass all rows up to the current frame_id (for trails).
+
+    Returns
+    -------
+    list[TraceConfig]
     """
-    configs: List[TraceConfig] = []
-    for _, df in play_df.groupby("frameId", sort=True):
-        configs.append(
-            TraceConfig(frame_df=df, trace_func=trace_func, row=row, col=col)
-        )
+    configs: List["TraceConfig"] = []
+
+    frame_ids = sorted(play_df["frameId"].unique())
+
+    if not trailing:
+        # Normal frame-by-frame traces
+        for _, df in play_df.groupby("frameId", sort=True):
+            configs.append(
+                TraceConfig(frame_df=df, trace_func=trace_func, row=row, col=col)
+            )
+    else:
+        # Cumulative trails — build progressively longer DataFrames
+        for fid in frame_ids:
+            df = play_df[play_df["frameId"] <= fid]
+            configs.append(
+                TraceConfig(frame_df=df, trace_func=trace_func, row=row, col=col)
+            )
+
     return configs
 
 
