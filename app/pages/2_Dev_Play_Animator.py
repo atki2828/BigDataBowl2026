@@ -1,5 +1,7 @@
+from functools import partial
 from typing import Callable, Optional, Union
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import polars as pl
@@ -8,14 +10,20 @@ import streamlit as st
 from utility.animations import Field, PlayAnimator, TraceConfig, build_trace_configs
 from utility.colors import player_role_colors
 from utility.dbx import DatabricksSQLClient
-from utility.tracebuilders import gameplay_trace_func_26, gameplay_trail_trace_func
+from utility.tracebuilders import (
+    arrow_trace_func,
+    ball_landing_trace_func,
+    gameplay_trace_func_26,
+    gameplay_trail_trace_func,
+    player_to_predict_trace_func_with_sa,
+)
 
 databricks_client = DatabricksSQLClient()
 
 st.sidebar.title("Big Data Bowl Explorer")
 
 animation_config = {
-    "duration": 150,
+    "duration": 125,
     "redraw": False,
     "slider_prefix": "Frame: ",
     "play_label": "▶",
@@ -46,7 +54,7 @@ def create_play_fig(
         row=1,
         col=1,
     )
-
+    # Trail trace config
     trail_trace_configs = build_trace_configs(
         play_df=animate_play_df,
         trace_func=gameplay_trail_trace_func,  # returns go.Scatter of trails
@@ -54,9 +62,57 @@ def create_play_fig(
         col=1,
         trailing=True,
     )
+    # Ball landing trace config
+    ball_landing_trace_configs = build_trace_configs(
+        play_df=animate_play_df,
+        trace_func=ball_landing_trace_func,  # returns go.Scatter of ball landing point
+        row=1,
+        col=1,
+    )
+    # Player to predict trace config
+    player_to_predict_trace_configs = build_trace_configs(
+        play_df=animate_play_df,
+        trace_func=player_to_predict_trace_func_with_sa,  # returns go.Scatter of players to predict
+        row=1,
+        col=1,
+    )
+    # Direction arrow trace func
+    direction_arrow_trace_func = partial(
+        arrow_trace_func, angle_col="dir", color="blue", arrow_length=3.0
+    )
+
+    # Direction arrow trace configs
+    direction_arrow_trace_configs = build_trace_configs(
+        play_df=animate_play_df,
+        trace_func=direction_arrow_trace_func,  # returns go.Scatter of orientation and direction arrows
+        row=1,
+        col=1,
+    )
+
+    # Orientation arrow trace func
+    orientation_arrow_trace_func = partial(
+        arrow_trace_func, angle_col="o", color="green", arrow_length=3.0
+    )
+    # Orientation arrow trace configs
+    orientation_arrow_trace_configs = build_trace_configs(
+        play_df=animate_play_df,
+        trace_func=orientation_arrow_trace_func,  # returns go.Scatter of orientation arrows
+        row=1,
+        col=1,
+    )
+    # Combine arrow trace configs
+    arrow_trace_configs = (
+        direction_arrow_trace_configs + orientation_arrow_trace_configs
+    )
 
     # 3) Concatenate all trace configs
-    trace_configs = gameplay_trace_configs + trail_trace_configs
+    trace_configs = (
+        gameplay_trace_configs
+        + trail_trace_configs
+        + ball_landing_trace_configs
+        + player_to_predict_trace_configs
+        + arrow_trace_configs
+    )
     # 4) Animate
     play_fig = PlayAnimator(
         field=field,
