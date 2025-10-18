@@ -224,7 +224,6 @@ def main(databricks_client):
                 f"Yardline {play_info.get('yardlineNumber', 'N/A')} | "
                 f"Clock {play_info.get('gameClock', 'N/A')}"
             )
-        st.divider()
 
         # --- Create and display animation ---
         fig = create_play_fig(animation_df.to_pandas(), animation_config)
