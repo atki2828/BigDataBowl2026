@@ -178,7 +178,6 @@ def build_animation_query(game_id: int, play_id: int) -> str:
 # TODO: Add Animation Controls
 
 
-# --- Main App ---
 def main(databricks_client):
     st.title("Big Data Bowl Play Explorer")
 
@@ -190,16 +189,47 @@ def main(databricks_client):
     else:
         st.success(f"Selected Game ID: {game_id}")
         st.success(f"Selected Play ID: {play_id}")
+
         animation_query = build_animation_query(game_id, play_id)
         animation_df = databricks_client.query_to_pl(animation_query)
+
+        if animation_df.is_empty():
+            st.warning("No data found for this play.")
+            return
+
+        # --- Extract one row of play-level metadata ---
+        play_info_cols = [
+            "playDescription",
+            "quarter",
+            "down",
+            "yardsToGo",
+            "yardlineNumber",
+            "possessionTeam",
+            "gameClock",
+        ]
+        play_info_cols = [c for c in play_info_cols if c in animation_df.columns]
+
+        play_info = animation_df.select(play_info_cols).unique().to_pandas().iloc[0]
+
+        # --- Display Play Summary Card ---
+        with st.container():
+            st.markdown("## 🏈 Play Summary")
+            st.markdown(
+                f"**{play_info.get('playDescription', 'No description available.')}**"
+            )
+            st.caption(
+                f"{play_info.get('possessionTeam', 'N/A')} | "
+                f"Q{play_info.get('quarter', 'N/A')} | "
+                f"{play_info.get('down', 'N/A')} & {play_info.get('yardsToGo', 'N/A')} | "
+                f"Yardline {play_info.get('yardlineNumber', 'N/A')} | "
+                f"Clock {play_info.get('gameClock', 'N/A')}"
+            )
+        st.divider()
+
+        # --- Create and display animation ---
         fig = create_play_fig(animation_df.to_pandas(), animation_config)
-        st.title("Play Animation Demo")
+        st.markdown("### Play Animation Demo")
         st.plotly_chart(fig, use_container_width=True)
-
-        # TODO: Add your animation/visualization logic here
-
-        # Example: Display the animation data as a table
-        st.dataframe(animation_df.sample(10))
 
 
 if __name__ == "__main__":
