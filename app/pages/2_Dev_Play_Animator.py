@@ -21,13 +21,19 @@ databricks_client = DatabricksSQLClient()
 
 st.sidebar.title("Big Data Bowl Explorer")
 
-animation_config = {
-    "duration": 125,
-    "redraw": False,
-    "slider_prefix": "Frame: ",
-    "play_label": "▶",
-    "pause_label": "⏸",
-}
+
+def set_speed_config(speed: str, max_frames: int) -> dict:
+    duration = (1 / speed) * max_frames
+
+    """Set animation speed configuration based on user selection."""
+    return {
+        "duration": duration,
+        "redraw": False,
+        "slider_prefix": "Frame: ",
+        "play_label": "▶",
+        "pause_label": "⏸",
+    }
+
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -321,6 +327,8 @@ def main(databricks_client):
         play_info_cols = [c for c in play_info_cols if c in animation_df.columns]
 
         play_info = animation_df.select(play_info_cols).unique().to_pandas().iloc[0]
+        max_frames = animation_df["frameId"].max() + 1
+        animation_config = set_speed_config(speed=3, max_frames=max_frames)
 
         # --- Display Play Summary Card ---
         with st.container():
