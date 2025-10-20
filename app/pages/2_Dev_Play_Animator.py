@@ -1,13 +1,12 @@
 from functools import partial
-from typing import Callable, Optional, Union
+from typing import Optional
 
-import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import polars as pl
 import streamlit as st
 
-from utility.animations import Field, PlayAnimator, TraceConfig, build_trace_configs
+from utility.animations import Field, PlayAnimator, build_trace_configs
 from utility.colors import player_role_colors
 from utility.dbx import DatabricksSQLClient
 from utility.tracebuilders import (
@@ -29,6 +28,70 @@ animation_config = {
     "play_label": "▶",
     "pause_label": "⏸",
 }
+
+import streamlit as st
+import streamlit.components.v1 as components
+
+
+def show_play_legend(player_role_colors: dict):
+    """Render a custom HTML legend for player roles and arrows."""
+    legend_html = """
+    <style>
+        .legend-container {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding: 10px;
+            border-radius: 10px;
+            background-color: #f8f9fa;
+            font-family: 'Helvetica', sans-serif;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+        }
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+        }
+        .legend-header {
+            font-weight: 600;
+            font-size: 1rem;
+            margin-bottom: 5px;
+            color: #333;
+        }
+    </style>
+    <div class="legend-container">
+        <div class="legend-header">🎨 Player Role Colors</div>
+    """
+
+    # Player roles
+    for role, color in player_role_colors.items():
+        legend_html += f"""
+        <div class="legend-item">
+            <div class="legend-color" style="background-color:{color};"></div>
+            <span>{role}</span>
+        </div>
+        """
+
+    # Add directional arrow colors
+    legend_html += """
+        <div class="legend-header" style="margin-top:8px;">🧭 Arrows</div>
+        <div class="legend-item">
+            <div class="legend-color" style="background-color:blue;"></div>
+            <span>Direction (dir)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background-color:green;"></div>
+            <span>Orientation (o)</span>
+        </div>
+    </div>
+    """
+
+    components.html(legend_html, height=260)
 
 
 def create_play_fig(
@@ -123,41 +186,95 @@ def create_play_fig(
     return play_fig
 
 
-# --- Query Helpers ---
 def get_game_ids(databricks_client):
-    """Fetch distinct game IDs and allow user to select one."""
+    """Fetch distinct games from play_animation_data and let user select one game_id."""
     game_query = """
-        SELECT DISTINCT game_id
-        FROM workspace.bigdatabowl2026.input_data
-        ORDER BY game_id
+        SELECT DISTINCT 
+            gameId AS game_id,
+            homeTeamAbbr,
+            visitorTeamAbbr,
+            CAST(gameDate AS DATE) AS game_date
+        FROM workspace.bigdatabowl2026.play_animation_data
+        ORDER BY game_date DESC
     """
-    games_ids = (
-        databricks_client.query_to_pl(game_query)
-        .select(pl.col("game_id").cast(pl.Int64))
-        .to_series()
-        .to_list()
+
+    games_df = databricks_client.query_to_pl(game_query)
+
+    if games_df.is_empty():
+        st.warning("No games found in play_animation_data.")
+        return None
+
+    # Build readable display labels
+    games_df = games_df.with_columns(
+        (
+            pl.col("game_date").dt.strftime("%Y-%m-%d")
+            + " | "
+            + pl.col("visitorTeamAbbr")
+            + " @ "
+            + pl.col("homeTeamAbbr")
+        ).alias("game_label")
     )
 
-    game_id = st.sidebar.selectbox("Select Game ID", games_ids, index=None)
-    return game_id
+    # Convert to Python lists for Streamlit selectbox
+    labels = games_df["game_label"].to_list()
+    ids = games_df["game_id"].to_list()
+
+    # Let user select one game
+    selected_label = st.sidebar.selectbox("Select Game", options=labels, index=None)
+
+    if selected_label is None:
+        return None
+
+    # Return only the game_id corresponding to the selected label
+    return ids[labels.index(selected_label)]
 
 
 def get_play_id(databricks_client, game_id: int | None):
-    """Fetch distinct play IDs for a given game and allow user to select one."""
+    """Fetch distinct plays for a selected game from play_animation_data and return one play_id."""
     if not game_id:
         return None
 
     play_query = f"""
-        SELECT DISTINCT play_id
-        FROM workspace.bigdatabowl2026.input_data
-        WHERE game_id = {game_id}
+        SELECT DISTINCT 
+            playId AS play_id,
+            playDescription,
+            down,
+            yardsToGo,
+            quarter
+        FROM workspace.bigdatabowl2026.play_animation_data
+        WHERE gameId = {game_id}
         ORDER BY play_id
     """
+
     plays_df = databricks_client.query_to_pl(play_query)
-    play_id = st.sidebar.selectbox(
-        "Select Play ID", plays_df["play_id"].to_list(), index=None
+
+    if plays_df.is_empty():
+        st.warning("No plays found for this game in play_animation_data.")
+        return None
+
+    # Build readable labels for dropdown
+    plays_df = plays_df.with_columns(
+        (
+            "Q"
+            + pl.col("quarter").cast(pl.Utf8)
+            + " | "
+            + pl.col("down").cast(pl.Utf8)
+            + " & "
+            + pl.col("yardsToGo").cast(pl.Utf8)
+            + " | "
+            + pl.col("playDescription")
+        ).alias("play_label")
     )
-    return play_id
+
+    labels = plays_df["play_label"].to_list()
+    ids = plays_df["play_id"].to_list()
+
+    selected_label = st.sidebar.selectbox("Select Play", options=labels, index=None)
+
+    if selected_label is None:
+        return None
+
+    return ids[labels.index(selected_label)]
 
 
 def build_animation_query(game_id: int, play_id: int) -> str:
@@ -170,12 +287,6 @@ def build_animation_query(game_id: int, play_id: int) -> str:
         ORDER BY frameId DESC
 
     """
-
-
-# TODO: Save Queries to sql folder
-# TODO: Create Additional Animation Functions From Lucid
-# TODO: Work on Animation Page Desgin/Layout
-# TODO: Add Animation Controls
 
 
 def main(databricks_client):
@@ -229,6 +340,9 @@ def main(databricks_client):
         fig = create_play_fig(animation_df.to_pandas(), animation_config)
         st.markdown("### Play Animation Demo")
         st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("### Legend")
+        show_play_legend(player_role_colors)
 
 
 if __name__ == "__main__":
