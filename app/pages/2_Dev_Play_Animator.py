@@ -23,6 +23,41 @@ databricks_client = DatabricksSQLClient()
 st.sidebar.title("Big Data Bowl Explorer")
 
 
+def flip_coord_pl(arr: pl.Series, dim_max: float) -> pl.Series:
+    return dim_max - arr
+
+
+def flip_angle(arr: pl.series) -> pl.Series:
+    pl.when(arr >= 180).then(arr - 180).otherwise(arr + 180)
+
+
+def flip_play_always_right_pl(
+    df: pl.DataFrame, direction_col: str = "playDirection"
+) -> pl.DataFrame:
+
+    # If Direction is already setup Right don't do anything
+    direction = df[direction_col][0].lower()
+    if direction == "right":
+        return df
+
+    # Define partials
+    flip_x = partial(flip_coord_pl, dim_max=120)
+    flip_y = partial(flip_coord_pl, dim_max=53.3)
+
+    flip_x_cols = ["x", "ballLandX", "absoluteYardlineNumber"]
+    flip_y_cols = ["y", "ballLandY"]
+    flip_angle_cols = ["dir", "o"]
+
+    # Build all flip expressions together (single with_columns call is faster)
+    flip_exprs = (
+        [flip_x(pl.col(c)).alias(c) for c in flip_x_cols if c in df.columns]
+        + [flip_y(pl.col(c)).alias(c) for c in flip_y_cols if c in df.columns]
+        + [pl.lit("right").alias("playDirection")]
+        + [((pl.col(c) + 180) % 360).alias(c) for c in flip_angle_cols]
+    )
+    return df.with_columns(flip_exprs)
+
+
 def create_play_fig(
     animate_play_df: pd.DataFrame, animation_config: Optional[dict] = None
 ) -> go.Figure:
@@ -239,7 +274,7 @@ def main(databricks_client):
 
         animation_query = build_animation_query(game_id, play_id)
         animation_df = databricks_client.query_to_pl(animation_query)
-
+        animation_df = flip_play_always_right_pl(animation_df)
         if animation_df.is_empty():
             st.warning("No data found for this play.")
             return
