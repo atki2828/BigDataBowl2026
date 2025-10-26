@@ -7,6 +7,7 @@ import polars as pl
 import streamlit as st
 
 from utility.animations import Field, PlayAnimator, build_trace_configs
+from utility.appcomponents import set_speed_config, show_play_legend
 from utility.colors import player_role_colors
 from utility.dbx import DatabricksSQLClient
 from utility.tracebuilders import (
@@ -141,7 +142,7 @@ def get_game_ids(databricks_client):
             + " @ "
             + pl.col("homeTeamAbbr")
         ).alias("game_label")
-    )
+    ).sort(by="game_label", descending=False)
 
     # Convert to Python lists for Streamlit selectbox
     labels = games_df["game_label"].to_list()
@@ -192,7 +193,7 @@ def get_play_id(databricks_client, game_id: int | None):
             + " | "
             + pl.col("playDescription")
         ).alias("play_label")
-    )
+    ).sort(by="play_label")
 
     labels = plays_df["play_label"].to_list()
     ids = plays_df["play_id"].to_list()
@@ -226,6 +227,13 @@ def main(databricks_client):
     if not game_id or not play_id:
         st.info("Select a Game ID and Play ID to view the animation.")
     else:
+        user_speed_selection = st.sidebar.number_input(
+            "Set Animation Speed (frames/sec)",
+            min_value=1,
+            max_value=200,
+            value=3,
+            step=1,
+        )
         st.success(f"Selected Game ID: {game_id}")
         st.success(f"Selected Play ID: {play_id}")
 
@@ -248,9 +256,14 @@ def main(databricks_client):
         ]
         play_info_cols = [c for c in play_info_cols if c in animation_df.columns]
 
+        # Get Play Info For Legend
         play_info = animation_df.select(play_info_cols).unique().to_pandas().iloc[0]
+
+        # Set Animation Speed
         max_frames = animation_df["frameId"].max() + 1
-        animation_config = set_speed_config(speed=3, max_frames=max_frames)
+        animation_config = set_speed_config(
+            speed=user_speed_selection, max_frames=max_frames
+        )
 
         # --- Display Play Summary Card ---
         with st.container():
