@@ -35,3 +35,11 @@ nfl_colors = {
     "WAS": "#773141",  # Wash
     "LA": "#003594",
 }
+
+
+player_role_colors = {
+    "Defensive Coverage": "#1f77b4",  # Blue
+    "Other Route Runner": "#ff7f0e",  # Orange
+    "Passer": "#2ca02c",  # Green
+    "Targeted Receiver": "#d62728",  # Red
+}
